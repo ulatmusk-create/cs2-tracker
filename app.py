@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response
 import requests
 import re
 import time
@@ -7,6 +7,8 @@ import smtplib
 import os
 import uuid
 import json
+import csv
+import io
 import xml.etree.ElementTree as ET
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -27,8 +29,19 @@ HEADERS = {
 }
 
 DATABASE_URL = os.getenv('DATABASE_URL')
+if DATABASE_URL and DATABASE_URL.startswith('postgres://'):
+    DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
 USE_POSTGRES = bool(DATABASE_URL)
-P = '%s' if USE_POSTGRES else '?'  # SQL placeholder
+P = '%s' if USE_POSTGRES else '?'
+
+STRIPE_SECRET = os.getenv('STRIPE_SECRET_KEY')
+STRIPE_PUB = os.getenv('STRIPE_PUBLISHABLE_KEY')
+STRIPE_PRICE_ID = os.getenv('STRIPE_PRICE_ID')
+STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
+
+if STRIPE_SECRET:
+    import stripe
+    stripe.api_key = STRIPE_SECRET
 
 if USE_POSTGRES:
     import psycopg2
@@ -103,8 +116,47 @@ def init_db():
                 triggered INTEGER DEFAULT 0
             )
         ''')
+        cur.execute(f'''
+            CREATE TABLE IF NOT EXISTS subscribers (
+                id {pk},
+                email TEXT UNIQUE NOT NULL,
+                stripe_customer_id TEXT,
+                stripe_subscription_id TEXT,
+                status TEXT DEFAULT 'inactive',
+                created_at TEXT
+            )
+        ''')
+        cur.execute(f'''
+            CREATE TABLE IF NOT EXISTS buy_prices (
+                id {pk},
+                steam_id TEXT NOT NULL,
+                market_hash_name TEXT NOT NULL,
+                buy_price REAL NOT NULL,
+                updated_at TEXT
+            )
+        ''')
 
 init_db()
+
+
+def is_pro(email):
+    if not email:
+        return False
+    with db() as cur:
+        cur.execute(f"SELECT status FROM subscribers WHERE email={P}", (email.lower().strip(),))
+        row = cur.fetchone()
+    return bool(row and row['status'] == 'active')
+
+
+def _upsert_subscriber(email, customer_id, sub_id, status):
+    with db() as cur:
+        cur.execute(f"SELECT id FROM subscribers WHERE email={P}", (email,))
+        if cur.fetchone():
+            cur.execute(f"UPDATE subscribers SET stripe_customer_id={P}, stripe_subscription_id={P}, status={P} WHERE email={P}",
+                       (customer_id, sub_id, status, email))
+        else:
+            cur.execute(f"INSERT INTO subscribers (email, stripe_customer_id, stripe_subscription_id, status, created_at) VALUES ({P},{P},{P},{P},{P})",
+                       (email, customer_id, sub_id, status, datetime.now().isoformat()))
 
 
 # ── Steam helpers ─────────────────────────────────────────────────────────────
@@ -442,13 +494,14 @@ def get_history(steam_id):
 
 @app.route('/wishlist')
 def wishlist():
-    email = request.args.get('email', '').strip()
+    email = request.args.get('email', '').strip().lower()
     items = []
-    if email:
+    pro = is_pro(email) if email else False
+    if email and pro:
         with db() as cur:
             cur.execute(f"SELECT * FROM wishlist WHERE email={P} ORDER BY created_at DESC", (email,))
             items = cur.fetchall()
-    return render_template('wishlist.html', items=items, email=email)
+    return render_template('wishlist.html', items=items, email=email, pro=pro)
 
 
 @app.route('/api/market/search')
@@ -493,6 +546,9 @@ def add_wishlist():
     except (ValueError, TypeError):
         return jsonify({'success': False, 'error': 'Invalid price'}), 400
 
+    if not is_pro(email):
+        return jsonify({'success': False, 'pro_required': True, 'error': 'Wishlist is a Pro feature.'}), 403
+
     with db() as cur:
         cur.execute(
             f"INSERT INTO wishlist (email, market_hash_name, skin_name, target_price, current_price, created_at) VALUES ({P},{P},{P},{P},{P},{P})",
@@ -529,6 +585,15 @@ def create_alert():
     except (ValueError, TypeError):
         return jsonify({'success': False, 'error': 'Invalid price'}), 400
 
+    if not is_pro(email):
+        with db() as cur:
+            cur.execute(f"SELECT COUNT(*) as cnt FROM alerts WHERE email={P} AND triggered=0", (email,))
+            row = cur.fetchone()
+            count = row['cnt'] if row else 0
+        if count >= 1:
+            return jsonify({'success': False, 'pro_required': True,
+                           'error': 'Free plan allows 1 active alert. Upgrade to Pro for unlimited alerts.'}), 403
+
     with db() as cur:
         cur.execute(
             f"INSERT INTO alerts (email, market_hash_name, skin_name, threshold_price, created_at) VALUES ({P},{P},{P},{P},{P})",
@@ -564,19 +629,168 @@ def check_alerts():
         active_wishlist = cur.fetchall()
 
     triggered = 0
-    for item in list(active_alerts) + list(active_wishlist):
+    for item in active_alerts:
         _, price = fetch_price(item['market_hash_name'])
-        table = 'alerts' if 'threshold_price' in dict(item) else 'wishlist'
         with db() as cur:
-            cur.execute(f"UPDATE {table} SET current_price={P}, last_checked={P} WHERE id={P}",
+            cur.execute(f"UPDATE alerts SET current_price={P}, last_checked={P} WHERE id={P}",
                        (price, datetime.now().isoformat(), item['id']))
             if price > 0 and price <= item['threshold_price']:
                 sent = send_alert_email(item['email'], item['skin_name'], item['threshold_price'], price)
                 if sent:
-                    cur.execute(f"UPDATE {table} SET triggered=1 WHERE id={P}", (item['id'],))
+                    cur.execute(f"UPDATE alerts SET triggered=1 WHERE id={P}", (item['id'],))
+                    triggered += 1
+
+    for item in active_wishlist:
+        _, price = fetch_price(item['market_hash_name'])
+        with db() as cur:
+            cur.execute(f"UPDATE wishlist SET current_price={P}, last_checked={P} WHERE id={P}",
+                       (price, datetime.now().isoformat(), item['id']))
+            if price > 0 and price <= item['target_price']:
+                sent = send_alert_email(item['email'], item['skin_name'], item['target_price'], price)
+                if sent:
+                    cur.execute(f"UPDATE wishlist SET triggered=1 WHERE id={P}", (item['id'],))
                     triggered += 1
 
     return jsonify({'alerts_checked': len(active_alerts), 'wishlist_checked': len(active_wishlist), 'triggered': triggered})
+
+
+# ── Pricing & Stripe ──────────────────────────────────────────────────────────
+
+@app.route('/pricing')
+def pricing():
+    return render_template('pricing.html', stripe_pub=STRIPE_PUB)
+
+@app.route('/create-checkout', methods=['POST'])
+def create_checkout():
+    if not STRIPE_SECRET:
+        return jsonify({'error': 'Payments not configured yet'}), 500
+    data = request.get_json()
+    email = (data.get('email') or '').strip().lower()
+    try:
+        session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            mode='subscription',
+            customer_email=email or None,
+            line_items=[{'price': STRIPE_PRICE_ID, 'quantity': 1}],
+            success_url=request.host_url + 'success?session_id={CHECKOUT_SESSION_ID}',
+            cancel_url=request.host_url + 'pricing',
+        )
+        return jsonify({'url': session.url})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/success')
+def success():
+    return render_template('success.html')
+
+@app.route('/webhook', methods=['POST'])
+def stripe_webhook():
+    if not STRIPE_SECRET:
+        return '', 400
+    payload = request.data
+    sig = request.headers.get('Stripe-Signature')
+    try:
+        event = stripe.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
+    except Exception:
+        return '', 400
+
+    if event['type'] == 'checkout.session.completed':
+        session = event['data']['object']
+        email = (session.get('customer_email') or
+                 (session.get('customer_details') or {}).get('email') or '').lower()
+        sub_id = session.get('subscription')
+        customer_id = session.get('customer')
+        if email:
+            _upsert_subscriber(email, customer_id, sub_id, 'active')
+
+    elif event['type'] in ('customer.subscription.deleted', 'customer.subscription.paused'):
+        sub_id = event['data']['object']['id']
+        with db() as cur:
+            cur.execute(f"UPDATE subscribers SET status='cancelled' WHERE stripe_subscription_id={P}", (sub_id,))
+
+    elif event['type'] == 'customer.subscription.updated':
+        sub = event['data']['object']
+        status = 'active' if sub['status'] == 'active' else 'cancelled'
+        with db() as cur:
+            cur.execute(f"UPDATE subscribers SET status={P} WHERE stripe_subscription_id={P}", (status, sub['id']))
+
+    return '', 200
+
+@app.route('/api/check-pro')
+def check_pro_route():
+    email = request.args.get('email', '').strip().lower()
+    return jsonify({'pro': is_pro(email)})
+
+
+# ── P&L buy price ─────────────────────────────────────────────────────────────
+
+@app.route('/api/buy-price', methods=['POST'])
+def save_buy_price():
+    data = request.get_json()
+    steam_id = (data.get('steam_id') or '').strip()
+    mhn = (data.get('market_hash_name') or '').strip()
+    try:
+        buy_price = float(data.get('buy_price', 0))
+    except (ValueError, TypeError):
+        return jsonify({'success': False}), 400
+    if not steam_id or not mhn:
+        return jsonify({'success': False}), 400
+
+    with db() as cur:
+        cur.execute(f"SELECT id FROM buy_prices WHERE steam_id={P} AND market_hash_name={P}", (steam_id, mhn))
+        if cur.fetchone():
+            cur.execute(f"UPDATE buy_prices SET buy_price={P}, updated_at={P} WHERE steam_id={P} AND market_hash_name={P}",
+                       (buy_price, datetime.now().isoformat(), steam_id, mhn))
+        else:
+            cur.execute(f"INSERT INTO buy_prices (steam_id, market_hash_name, buy_price, updated_at) VALUES ({P},{P},{P},{P})",
+                       (steam_id, mhn, buy_price, datetime.now().isoformat()))
+    return jsonify({'success': True})
+
+@app.route('/api/buy-prices/<steam_id>')
+def get_buy_prices(steam_id):
+    with db() as cur:
+        cur.execute(f"SELECT market_hash_name, buy_price FROM buy_prices WHERE steam_id={P}", (steam_id,))
+        rows = cur.fetchall()
+    return jsonify({r['market_hash_name']: r['buy_price'] for r in rows})
+
+
+# ── CSV export ────────────────────────────────────────────────────────────────
+
+@app.route('/export/<steam_id>')
+def export_csv(steam_id):
+    with db() as cur:
+        cur.execute(f"SELECT market_hash_name, buy_price FROM buy_prices WHERE steam_id={P}", (steam_id,))
+        bp_rows = cur.fetchall()
+    buy_prices_map = {r['market_hash_name']: r['buy_price'] for r in bp_rows}
+
+    inv_data, err = fetch_inventory(steam_id)
+    if not inv_data:
+        return err or 'Failed', 400
+
+    items = parse_items(inv_data)
+    unique_names = list({item['market_hash_name'] for item in items})
+    prices = {}
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        for name, price in executor.map(fetch_price, unique_names):
+            prices[name] = price
+    for item in items:
+        item['price'] = prices.get(item['market_hash_name'], 0.0)
+        item['total'] = round(item['price'] * item['amount'], 2)
+    items.sort(key=lambda x: x['total'], reverse=True)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Skin', 'Wear', 'Qty', 'Current Price', 'Total Value', 'Buy Price', 'P&L'])
+    for item in items:
+        bp = buy_prices_map.get(item['market_hash_name'], '')
+        pl = round((item['price'] - bp) * item['amount'], 2) if bp != '' else ''
+        writer.writerow([item['name'], item['wear'], item['amount'],
+                        f"${item['price']:.2f}", f"${item['total']:.2f}",
+                        f"${bp:.2f}" if bp != '' else '', f"${pl:.2f}" if pl != '' else ''])
+
+    output.seek(0)
+    return Response(output.getvalue(), mimetype='text/csv',
+                   headers={'Content-Disposition': f'attachment; filename=cs2-inventory-{steam_id}.csv'})
 
 
 if __name__ == '__main__':

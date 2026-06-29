@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pricing — CS2 Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>body { font-family: 'Inter', sans-serif; background: #080c18; }</style>
+</head>
+<body class="min-h-screen text-gray-200">
+
+    <nav class="border-b border-white/5 px-6 py-4">
+        <div class="max-w-5xl mx-auto flex items-center justify-between">
+            <a href="/" class="flex items-center gap-1.5">
+                <span class="text-orange-500 font-black text-xl">CS2</span>
+                <span class="text-white font-bold text-xl">Tracker</span>
+            </a>
+            <a href="/" class="text-sm text-gray-500 hover:text-orange-400 transition-colors">← Back</a>
+        </div>
+    </nav>
+
+    <main class="max-w-5xl mx-auto px-6 py-16">
+        <div class="text-center mb-14">
+            <h1 class="text-5xl font-black text-white mb-4">Stop guessing. Start profiting.</h1>
+            <p class="text-gray-400 text-lg max-w-xl mx-auto">CS2 Tracker gives you real-time prices, price alerts, and P&L tracking — everything you need to trade smarter.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+
+            <!-- Free -->
+            <div class="bg-[#111827] border border-white/5 rounded-2xl p-8">
+                <p class="text-gray-500 font-semibold text-sm uppercase tracking-widest mb-2">Free</p>
+                <div class="flex items-end gap-1 mb-6">
+                    <span class="text-4xl font-black text-white">$0</span>
+                    <span class="text-gray-500 mb-1">/forever</span>
+                </div>
+                <ul class="space-y-3 mb-8">
+                    <li class="flex items-center gap-3 text-sm text-gray-300">
+                        <span class="text-emerald-400 font-bold">✓</span> Full inventory tracker
+                    </li>
+                    <li class="flex items-center gap-3 text-sm text-gray-300">
+                        <span class="text-emerald-400 font-bold">✓</span> Live prices on all skins
+                    </li>
+                    <li class="flex items-center gap-3 text-sm text-gray-300">
+                        <span class="text-emerald-400 font-bold">✓</span> Shareable inventory link
+                    </li>
+                    <li class="flex items-center gap-3 text-sm text-gray-300">
+                        <span class="text-emerald-400 font-bold">✓</span> Portfolio history chart
+                    </li>
+                    <li class="flex items-center gap-3 text-sm text-gray-400">
+                        <span class="text-gray-600 font-bold">✓</span> 1 price alert
+                    </li>
+                    <li class="flex items-center gap-3 text-sm text-gray-600 line-through">
+                        <span>✗</span> Wishlist tracking
+                    </li>
+                    <li class="flex items-center gap-3 text-sm text-gray-600 line-through">
+                        <span>✗</span> P&L tracker
+                    </li>
+                    <li class="flex items-center gap-3 text-sm text-gray-600 line-through">
+                        <span>✗</span> CSV export
+                    </li>
+                </ul>
+                <a href="/" class="block text-center border border-white/10 hover:border-white/20 text-gray-400 hover:text-white font-semibold px-6 py-3 rounded-xl text-sm transition-colors">
+                    Get started free
+                </a>
+            </div>
+
+            <!-- Pro -->
+            <div class="bg-gradient-to-b from-orange-500/10 to-orange-500/5 border border-orange-500/30 rounded-2xl p-8 relative">
+                <div class="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <span class="bg-orange-500 text-white text-xs font-bold px-4 py-1 rounded-full">MOST POPULAR</span>
+                </div>
+                <p class="text-orange-400 font-semibold text-sm uppercase tracking-widest mb-2">Pro</p>
+                <div class="flex items-end gap-1 mb-6">
+                    <span class="text-4xl font-black text-white">$7</span>
+                    <span class="text-gray-500 mb-1">/month</span>
+                </div>
+                <ul class="space-y-3 mb-8">
+                    <li class="flex items-center gap-3 text-sm text-gray-300">
+                        <span class="text-orange-400 font-bold">✓</span> Everything in Free
+                    </li>
+                    <li class="flex items-center gap-3 text-sm text-gray-300">
+                        <span class="text-orange-400 font-bold">✓</span> <strong class="text-white">Unlimited</strong> price alerts
+                    </li>
+                    <li class="flex items-center gap-3 text-sm text-gray-300">
+                        <span class="text-orange-400 font-bold">✓</span> Wishlist with price tracking
+                    </li>
+                    <li class="flex items-center gap-3 text-sm text-gray-300">
+                        <span class="text-orange-400 font-bold">✓</span> P&L tracker per skin
+                    </li>
+                    <li class="flex items-center gap-3 text-sm text-gray-300">
+                        <span class="text-orange-400 font-bold">✓</span> CSV export
+                    </li>
+                    <li class="flex items-center gap-3 text-sm text-gray-300">
+                        <span class="text-orange-400 font-bold">✓</span> Cancel anytime
+                    </li>
+                </ul>
+
+                <div class="mb-3">
+                    <input type="email" id="checkoutEmail" placeholder="your@email.com"
+                           class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 text-gray-100 text-sm focus:outline-none focus:border-orange-500 transition-colors placeholder-gray-600 mb-3">
+                </div>
+                <button onclick="startCheckout()"
+                        class="w-full bg-orange-500 hover:bg-orange-400 text-white font-bold px-6 py-3 rounded-xl text-sm transition-colors">
+                    Get Pro →
+                </button>
+                <p id="checkoutError" class="text-red-400 text-xs mt-2 hidden"></p>
+                <p class="text-gray-600 text-xs text-center mt-3">Secure payment via Stripe · Cancel anytime</p>
+            </div>
+        </div>
+
+        <!-- FAQ -->
+        <div class="max-w-2xl mx-auto mt-16">
+            <h2 class="text-white font-bold text-xl mb-6">Common questions</h2>
+            <div class="space-y-4">
+                <div class="bg-[#111827] border border-white/5 rounded-xl p-5">
+                    <p class="text-white font-semibold text-sm mb-2">How does the P&L tracker work?</p>
+                    <p class="text-gray-500 text-sm">Enter what you paid for each skin on your dashboard. CS2 Tracker compares it to the current market price and shows your profit or loss per skin and in total.</p>
+                </div>
+                <div class="bg-[#111827] border border-white/5 rounded-xl p-5">
+                    <p class="text-white font-semibold text-sm mb-2">How do price alerts work?</p>
+                    <p class="text-gray-500 text-sm">Set a target price for any skin. When the Steam market price drops below it, you'll get an email immediately. Pro gives you unlimited alerts.</p>
+                </div>
+                <div class="bg-[#111827] border border-white/5 rounded-xl p-5">
+                    <p class="text-white font-semibold text-sm mb-2">Can I cancel anytime?</p>
+                    <p class="text-gray-500 text-sm">Yes. Cancel from Stripe's customer portal anytime — your Pro access continues until the end of the billing period.</p>
+                </div>
+                <div class="bg-[#111827] border border-white/5 rounded-xl p-5">
+                    <p class="text-white font-semibold text-sm mb-2">What email should I use?</p>
+                    <p class="text-gray-500 text-sm">Use the same email everywhere — for checkout, for alerts, for wishlist. That's how we know you're Pro.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        async function startCheckout() {
+            const email = document.getElementById('checkoutEmail').value.trim();
+            const errEl = document.getElementById('checkoutError');
+            errEl.classList.add('hidden');
+
+            if (!email.includes('@')) {
+                errEl.textContent = 'Enter a valid email address.';
+                errEl.classList.remove('hidden');
+                return;
+            }
+
+            const btn = document.querySelector('button[onclick="startCheckout()"]');
+            btn.textContent = 'Redirecting...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/create-checkout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                const data = await res.json();
+                if (data.url) {
+                    window.location.href = data.url;
+                } else {
+                    errEl.textContent = data.error || 'Something went wrong. Try again.';
+                    errEl.classList.remove('hidden');
+                    btn.textContent = 'Get Pro →';
+                    btn.disabled = false;
+                }
+            } catch (e) {
+                errEl.textContent = 'Network error. Try again.';
+                errEl.classList.remove('hidden');
+                btn.textContent = 'Get Pro →';
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
