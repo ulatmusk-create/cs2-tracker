@@ -13,15 +13,13 @@
         .input-glow:focus { box-shadow: 0 0 0 2px rgba(249,115,22,0.4); }
         .btn-primary { background:linear-gradient(135deg,#f97316,#ea6c0a); transition:all 0.2s; }
         .btn-primary:hover { filter:brightness(1.1); transform:translateY(-1px); }
+        .btn-primary:active { transform:translateY(0); }
         .feature-card { background:linear-gradient(135deg,#111827 0%,#0f1a2e 100%); transition:border-color 0.2s; }
         .feature-card:hover { border-color:rgba(249,115,22,0.3); }
-        .steam-btn { background:linear-gradient(135deg,#1b2838,#2a475e); transition:all 0.2s; }
-        .steam-btn:hover { filter:brightness(1.15); transform:translateY(-1px); }
     </style>
 </head>
 <body class="min-h-screen text-gray-200">
 
-    <!-- Nav -->
     <nav class="border-b border-white/5 px-6 py-4 relative z-10">
         <div class="max-w-6xl mx-auto flex items-center justify-between">
             <div class="flex items-center gap-1.5">
@@ -30,23 +28,19 @@
             </div>
             {% if user %}
             <div class="flex items-center gap-3">
-                <img src="{{ user.avatar }}" alt="{{ user.username }}" class="w-8 h-8 rounded-full border border-white/10" onerror="this.style.display='none'">
-                <span class="text-gray-300 text-sm font-medium">{{ user.username }}</span>
-                <a href="/logout" class="text-gray-600 hover:text-gray-400 text-sm transition-colors">Log out</a>
+                {% if user.avatar %}<img src="{{ user.avatar }}" class="w-8 h-8 rounded-full border border-white/10">{% endif %}
+                <span class="text-gray-300 text-sm">{{ user.username }}</span>
+                <a href="/logout" class="text-gray-600 hover:text-gray-400 text-xs transition-colors">Log out</a>
             </div>
             {% else %}
-            <a href="/login" class="steam-btn flex items-center gap-2 text-white text-sm font-semibold px-4 py-2 rounded-xl">
-                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.454 1.012H7.54zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.252 0-2.265-1.014-2.265-2.265z"/></svg>
-                Sign in with Steam
-            </a>
+            <span class="text-gray-600 text-sm">No account needed</span>
             {% endif %}
         </div>
     </nav>
 
-    <!-- Hero -->
     <main class="relative overflow-hidden">
         <div class="hero-glow"></div>
-        <div class="max-w-3xl mx-auto px-6 pt-20 pb-20 text-center relative z-10">
+        <div class="max-w-3xl mx-auto px-6 pt-28 pb-20 text-center relative z-10">
 
             <div class="inline-flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-full px-4 py-1.5 mb-8">
                 <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
@@ -58,55 +52,22 @@
                 <span class="text-orange-500">CS2 inventory</span> worth?
             </h1>
 
-            <p class="text-gray-400 text-lg mb-10 max-w-lg mx-auto leading-relaxed">
-                Real-time prices, P&L tracking, price alerts, float info, and shareable inventory links.
+            <p class="text-gray-400 text-lg sm:text-xl mb-12 max-w-lg mx-auto leading-relaxed">
+                Paste your Steam profile URL and get a full breakdown of your skin values in seconds.
             </p>
 
             {% if user %}
-            <!-- Logged in: one-click load -->
-            <div class="max-w-xl mx-auto mb-6">
+            <div class="max-w-2xl mx-auto mb-6">
                 <a href="/me" id="myInvBtn"
                    class="btn-primary block w-full text-white font-bold px-8 py-4 rounded-xl text-base shadow-lg text-center"
-                   onclick="document.getElementById('myInvBtn').textContent='Loading…'">
+                   onclick="this.textContent='Loading…'">
                     View My Inventory →
                 </a>
-                <p class="text-gray-600 text-xs mt-3">Logged in as <strong class="text-gray-400">{{ user.username }}</strong></p>
+                <p class="text-gray-600 text-xs mt-3">Signed in as <strong class="text-gray-400">{{ user.username }}</strong> · <a href="/logout" class="hover:text-gray-300 transition-colors">log out</a></p>
             </div>
-            <div class="text-gray-600 text-sm mb-8">— or track someone else —</div>
-            {% else %}
-            <!-- Not logged in: Steam login CTA -->
-            <div class="max-w-xl mx-auto mb-8">
-                <a href="/login"
-                   class="steam-btn flex items-center justify-center gap-3 w-full text-white font-bold px-8 py-4 rounded-xl text-base shadow-lg">
-                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.454 1.012H7.54zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.252 0-2.265-1.014-2.265-2.265z"/></svg>
-                    Sign in with Steam
-                </a>
-
-                <!-- Trust signals -->
-                <div class="mt-4 bg-white/3 border border-white/5 rounded-xl px-5 py-4 text-left space-y-2">
-                    <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3">How Steam login works</p>
-                    <div class="flex items-start gap-2.5">
-                        <span class="text-emerald-400 text-sm shrink-0">✓</span>
-                        <p class="text-gray-400 text-sm">You log in on <strong class="text-white">Steam's own website</strong> — your password never touches our servers</p>
-                    </div>
-                    <div class="flex items-start gap-2.5">
-                        <span class="text-emerald-400 text-sm shrink-0">✓</span>
-                        <p class="text-gray-400 text-sm">We only receive your <strong class="text-white">SteamID, username, and avatar</strong> — read-only, public info</p>
-                    </div>
-                    <div class="flex items-start gap-2.5">
-                        <span class="text-emerald-400 text-sm shrink-0">✓</span>
-                        <p class="text-gray-400 text-sm">Same login system used by <strong class="text-white">CSFloat, Skinport, BUFF163</strong> and every major CS2 site</p>
-                    </div>
-                    <div class="flex items-start gap-2.5">
-                        <span class="text-emerald-400 text-sm shrink-0">✓</span>
-                        <p class="text-gray-400 text-sm">No password, no email, no credit card — just your Steam account</p>
-                    </div>
-                </div>
-            </div>
-            <div class="text-gray-600 text-sm mb-6">— or track without an account —</div>
+            <div class="text-gray-600 text-sm mb-6">— or track someone else —</div>
             {% endif %}
 
-            <!-- Manual URL form (always visible) -->
             <form method="POST" action="/track" id="trackForm">
                 <div class="flex flex-col sm:flex-row gap-3 max-w-2xl mx-auto">
                     <input type="text" name="profile" id="profileInput"
@@ -126,7 +87,7 @@
                 {% endif %}
 
                 <p class="text-gray-600 text-xs mt-4">
-                    Inventory must be <strong class="text-gray-500">Public</strong> in Steam › Privacy Settings
+                    Your inventory must be <strong class="text-gray-500">Public</strong> in Steam &rsaquo; Privacy Settings
                 </p>
             </form>
 
@@ -136,18 +97,17 @@
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                     </svg>
-                    <span class="text-sm">Fetching inventory & market prices… (~15–30 seconds)</span>
+                    <span class="text-sm">Fetching inventory &amp; market prices&hellip; (~15–30 seconds)</span>
                 </div>
             </div>
         </div>
 
-        <!-- Features -->
         <div class="max-w-5xl mx-auto px-6 pb-16">
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div class="feature-card border border-white/5 rounded-2xl p-6">
                     <div class="text-3xl mb-4">💰</div>
                     <h3 class="font-semibold text-white mb-2">Live inventory value</h3>
-                    <p class="text-gray-500 text-sm leading-relaxed">Every skin looked up against live Steam Market prices. Portfolio history chart tracked over time.</p>
+                    <p class="text-gray-500 text-sm leading-relaxed">Every skin priced against live Steam Market data. Portfolio history chart tracked over time.</p>
                 </div>
                 <div class="feature-card border border-white/5 rounded-2xl p-6">
                     <div class="text-3xl mb-4">🔔</div>
@@ -157,7 +117,7 @@
                 <div class="feature-card border border-white/5 rounded-2xl p-6">
                     <div class="text-3xl mb-4">📊</div>
                     <h3 class="font-semibold text-white mb-2">P&L tracker & stickers</h3>
-                    <p class="text-gray-500 text-sm leading-relaxed">Enter buy prices, see profit/loss per skin. StatTrak badges, sticker icons, float tier display.</p>
+                    <p class="text-gray-500 text-sm leading-relaxed">Enter buy prices, see profit/loss per skin. StatTrak badges, sticker icons, float tier info.</p>
                 </div>
             </div>
         </div>

@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, Response, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, Response, session, redirect
 import requests
 import re
 import time
@@ -556,6 +556,7 @@ STEAM_OPENID = 'https://steamcommunity.com/openid/login'
 
 @app.route('/login')
 def login():
+    session['login_next'] = request.args.get('next', '/me')
     params = {
         'openid.ns': 'http://specs.openid.net/auth/2.0',
         'openid.mode': 'checkid_setup',
@@ -600,7 +601,8 @@ def auth_callback():
     session['steam_id'] = steam_id
     session['username'] = username
     session['avatar'] = avatar
-    return redirect('/me')
+    next_url = session.pop('login_next', '/me')
+    return redirect(next_url)
 
 
 @app.route('/logout')
