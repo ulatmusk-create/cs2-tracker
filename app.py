@@ -387,7 +387,7 @@ def track():
 
     with db() as cur:
         cur.execute(f"SELECT total_value, recorded_at FROM snapshots WHERE steam_id={P} ORDER BY recorded_at ASC", (steam_id,))
-        history = cur.fetchall()
+        history = [{'value': float(r['total_value']), 'date': r['recorded_at'][:10]} for r in cur.fetchall()]
 
     return render_template('dashboard.html',
         items=items,

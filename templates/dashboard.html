@@ -77,8 +77,8 @@
                     <h3 class="text-white font-semibold">Portfolio Value History</h3>
                     <p class="text-gray-600 text-xs mt-0.5">{{ history|length }} snapshots recorded</p>
                 </div>
-                {% set first_val = history[0][0] %}
-                {% set last_val = history[-1][0] %}
+                {% set first_val = history[0]['value'] %}
+                {% set last_val = history[-1]['value'] %}
                 {% set diff = last_val - first_val %}
                 <div class="text-right">
                     <p class="text-xs text-gray-500">Since first tracked</p>
@@ -272,9 +272,9 @@
                 new Chart(ctx, {
                     type: 'line',
                     data: {
-                        labels: HISTORY.map(h => h[1] ? h[1].slice(0,10) : ''),
+                        labels: HISTORY.map(h => h.date ? h.date.slice(0,10) : ''),
                         datasets: [{
-                            data: HISTORY.map(h => h[0]),
+                            data: HISTORY.map(h => h.value),
                             borderColor: '#f97316',
                             backgroundColor: 'rgba(249,115,22,0.08)',
                             borderWidth: 2,
