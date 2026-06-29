@@ -194,12 +194,11 @@
                     {% endif %}
 
                     <!-- Float button -->
-                    {% if item.inspect_link %}
-                    <button onclick="loadFloat({{ item.inspect_link|tojson }}, {{ item.name|tojson }})"
-                            class="w-full mt-2 text-gray-700 hover:text-cyan-400 text-xs transition-colors flex items-center justify-center gap-1 float-trigger"
-                            data-mhn="{{ item.market_hash_name }}">
+                    {% if item.wear %}
+                    <button onclick="openFloat({{ item.market_hash_name|tojson }}, {{ item.name|tojson }}, {{ item.wear|tojson }})"
+                            class="w-full mt-2 text-gray-700 hover:text-cyan-400 text-xs transition-colors flex items-center justify-center gap-1">
                         <span class="font-mono font-bold text-[10px]">ƒ</span>
-                        <span>inspect float</span>
+                        <span>float info</span>
                     </button>
                     {% endif %}
                 </div>
@@ -236,73 +235,53 @@
         </div>
     </div>
 
-    <!-- Float Inspector Modal -->
+    <!-- Float Info Modal -->
     <div id="floatModal" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeFloat()">
         <div class="bg-[#111827] border border-[#1e2d3d] rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <div class="flex items-center justify-between mb-1">
-                <h3 class="text-white font-bold text-lg">Float Inspector</h3>
+                <h3 class="text-white font-bold text-lg">Float Info</h3>
                 <button onclick="closeFloat()" class="text-gray-600 hover:text-white transition-colors text-xl leading-none">×</button>
             </div>
             <p id="floatSkinLabel" class="text-gray-500 text-sm mb-5 truncate"></p>
 
-            <!-- Loading -->
-            <div id="floatLoading" class="text-center py-10">
-                <div class="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-                <p class="text-gray-500 text-sm">Fetching float from CSFloat...</p>
-            </div>
-
-            <!-- Data -->
-            <div id="floatData" class="hidden">
-                <!-- Float bar -->
-                <div class="mb-5">
-                    <div class="relative h-3 rounded-full overflow-hidden mb-1" style="background:linear-gradient(to right,#38bdf8 0%,#34d399 7%,#a3e635 15%,#facc15 38%,#fb923c 45%,#ef4444 100%)">
-                        <div id="floatRangeOverlay" class="absolute top-0 h-full bg-black/60 rounded-l-full" style="left:0;width:0"></div>
-                        <div id="floatRangeOverlayRight" class="absolute top-0 h-full bg-black/60 rounded-r-full" style="right:0;width:0"></div>
-                        <div id="floatMarker" class="absolute top-0 w-1 h-full bg-white shadow-[0_0_6px_rgba(255,255,255,0.8)] rounded-full" style="left:0;transform:translateX(-50%)"></div>
-                    </div>
-                    <div class="flex justify-between text-[9px] text-gray-700 font-mono">
-                        <span>FN<br>0.00</span><span>MW<br>0.07</span><span>FT<br>0.15</span><span>WW<br>0.38</span><span>BS<br>0.45</span><span><br>1.00</span>
-                    </div>
+            <!-- Wear tier bar -->
+            <div class="mb-4">
+                <div class="relative h-4 rounded-full overflow-hidden mb-2" style="background:linear-gradient(to right,#38bdf8 0%,#34d399 7%,#a3e635 15%,#facc15 38%,#fb923c 45%,#ef4444 100%)">
+                    <!-- Highlight the current wear tier zone -->
+                    <div id="floatHighlight" class="absolute top-0 h-full border-2 border-white/60 rounded" style="left:0;width:0;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.3)"></div>
                 </div>
-
-                <!-- Float value -->
-                <div class="text-center mb-5">
-                    <p id="floatValue" class="text-4xl font-black font-mono tracking-tight"></p>
-                    <p id="floatWear" class="text-gray-500 text-sm mt-1"></p>
-                    <p id="floatRange" class="text-gray-700 text-xs mt-0.5"></p>
-                </div>
-
-                <!-- Stats grid -->
-                <div id="floatStatsGrid" class="grid grid-cols-2 gap-3 mb-5">
-                    <div class="bg-[#0a0e1a] rounded-xl p-3 text-center">
-                        <p class="text-gray-600 text-xs uppercase tracking-widest mb-1">Paint Seed</p>
-                        <p id="floatSeed" class="text-white font-bold text-xl font-mono"></p>
-                    </div>
-                    <div id="floatPhaseBox" class="bg-[#0a0e1a] rounded-xl p-3 text-center hidden">
-                        <p class="text-gray-600 text-xs uppercase tracking-widest mb-1">Phase</p>
-                        <p id="floatPhase" class="font-bold text-xl"></p>
-                    </div>
-                </div>
-
-                <!-- Stickers -->
-                <div id="floatStickersSection" class="hidden mb-4">
-                    <p class="text-gray-600 text-xs uppercase tracking-widest mb-3">Applied Stickers</p>
-                    <div id="floatStickersList" class="space-y-2"></div>
+                <div class="flex text-[9px] text-gray-600 font-mono" style="justify-content:space-between">
+                    <span class="text-center" style="width:7%">FN<br>0.00</span>
+                    <span class="text-center" style="width:8%">MW<br>0.07</span>
+                    <span class="text-center" style="width:23%">FT<br>0.15</span>
+                    <span class="text-center" style="width:7%">WW<br>0.38</span>
+                    <span class="text-center" style="width:55%">BS<br>0.45</span>
+                    <span class="text-center">1.00</span>
                 </div>
             </div>
 
-            <!-- Error -->
-            <div id="floatError" class="hidden text-center py-8">
-                <p class="text-4xl mb-3">⚠️</p>
-                <p id="floatErrorMsg" class="text-red-400 text-sm"></p>
-                <p class="text-gray-600 text-xs mt-2">Only CS2 weapon skins with an inspect link support float lookup.</p>
+            <!-- Wear tier label + range -->
+            <div class="bg-[#0a0e1a] rounded-xl p-4 mb-5 text-center">
+                <p id="floatWearLabel" class="text-2xl font-black mb-1"></p>
+                <p id="floatRangeLabel" class="text-gray-600 text-xs font-mono"></p>
             </div>
 
-            <div class="flex gap-3 mt-2">
+            <!-- Info note -->
+            <div class="bg-white/3 border border-white/5 rounded-xl p-4 mb-5">
+                <p class="text-gray-400 text-sm leading-relaxed">CS2 stores float values on Valve's game servers — exact float requires connecting to the game coordinator. Use CSFloat to get the precise value for your specific item.</p>
+            </div>
+
+            <!-- Stickers (if any were parsed from Steam API) -->
+            <div id="floatStickersSection" class="hidden mb-5">
+                <p class="text-gray-600 text-xs uppercase tracking-widest mb-3">Stickers on this item</p>
+                <div id="floatStickersList" class="space-y-2"></div>
+            </div>
+
+            <div class="flex gap-3">
                 <button onclick="closeFloat()" class="flex-1 border border-white/10 text-gray-400 rounded-xl py-2.5 text-sm hover:border-white/20 transition-colors">Close</button>
-                <a id="floatInspectBtn" href="#" target="_blank"
-                   class="flex-1 text-center bg-[#0a0e1a] hover:bg-white/5 border border-white/10 text-cyan-400 rounded-xl py-2.5 text-sm transition-colors">
-                   Inspect in Game ↗
+                <a id="floatCSFloatBtn" href="#" target="_blank"
+                   class="flex-1 text-center bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 font-semibold rounded-xl py-2.5 text-sm transition-colors">
+                   Check on CSFloat ↗
                 </a>
             </div>
         </div>
@@ -465,92 +444,56 @@
             setTimeout(() => btn.textContent = 'Copy', 2000);
         }
 
-        // ── Float Inspector ───────────────────────────────────────────────────
-        const PHASE_COLORS = {
-            'Ruby': '#e11d48', 'Sapphire': '#2563eb', 'Black Pearl': '#7c3aed',
-            'Emerald': '#059669', 'Phase 1': '#94a3b8', 'Phase 2': '#cbd5e1',
-            'Phase 3': '#e2e8f0', 'Phase 4': '#f1f5f9',
+        // ── Float Info ────────────────────────────────────────────────────────
+        const WEAR_TIERS = {
+            'Factory New':    { min: 0.00, max: 0.07, color: '#38bdf8', left: '0%',   width: '7%'  },
+            'Minimal Wear':   { min: 0.07, max: 0.15, color: '#34d399', left: '7%',   width: '8%'  },
+            'Field-Tested':   { min: 0.15, max: 0.38, color: '#a3e635', left: '15%',  width: '23%' },
+            'Well-Worn':      { min: 0.38, max: 0.45, color: '#fb923c', left: '38%',  width: '7%'  },
+            'Battle-Scarred': { min: 0.45, max: 1.00, color: '#ef4444', left: '45%',  width: '55%' },
         };
 
-        async function loadFloat(inspectUrl, skinName) {
+        function openFloat(mhn, skinName, wear) {
             document.getElementById('floatSkinLabel').textContent = skinName;
-            document.getElementById('floatLoading').classList.remove('hidden');
-            document.getElementById('floatData').classList.add('hidden');
-            document.getElementById('floatError').classList.add('hidden');
-            document.getElementById('floatPhaseBox').classList.add('hidden');
             document.getElementById('floatStickersSection').classList.add('hidden');
-            document.getElementById('floatInspectBtn').href = inspectUrl;
-            document.getElementById('floatModal').classList.remove('hidden');
 
-            try {
-                const res = await fetch('/api/float?url=' + encodeURIComponent(inspectUrl));
-                const data = await res.json();
-                document.getElementById('floatLoading').classList.add('hidden');
+            const tier = WEAR_TIERS[wear];
+            const wearLabel = document.getElementById('floatWearLabel');
+            const rangeLabel = document.getElementById('floatRangeLabel');
+            const highlight = document.getElementById('floatHighlight');
 
-                if (data.error) {
-                    document.getElementById('floatErrorMsg').textContent = data.error;
-                    document.getElementById('floatError').classList.remove('hidden');
-                    return;
-                }
-
-                const fv = data.float;
-                const minF = data.min || 0;
-                const maxF = data.max || 1;
-
-                // Marker position on 0-1 bar
-                document.getElementById('floatMarker').style.left = (fv * 100) + '%';
-
-                // Shade out out-of-range portions (items can't drop below min or above max)
-                document.getElementById('floatRangeOverlay').style.width = (minF * 100) + '%';
-                document.getElementById('floatRangeOverlayRight').style.width = ((1 - maxF) * 100) + '%';
-
-                // Float value + color
-                const floatEl = document.getElementById('floatValue');
-                floatEl.textContent = fv.toFixed(9);
-                if (fv < 0.07) floatEl.style.color = '#38bdf8';
-                else if (fv < 0.15) floatEl.style.color = '#34d399';
-                else if (fv < 0.38) floatEl.style.color = '#a3e635';
-                else if (fv < 0.45) floatEl.style.color = '#fb923c';
-                else floatEl.style.color = '#ef4444';
-
-                document.getElementById('floatWear').textContent = data.wear_name || '';
-                document.getElementById('floatRange').textContent = `Range: ${minF.toFixed(2)} – ${maxF.toFixed(2)}`;
-                document.getElementById('floatSeed').textContent = data.seed ?? '—';
-
-                // Phase (dopplers)
-                if (data.phase) {
-                    const phaseEl = document.getElementById('floatPhase');
-                    phaseEl.textContent = data.phase;
-                    phaseEl.style.color = PHASE_COLORS[data.phase] || '#fff';
-                    document.getElementById('floatPhaseBox').classList.remove('hidden');
-                }
-
-                // Stickers
-                const stickers = data.stickers || [];
-                if (stickers.length) {
-                    const list = document.getElementById('floatStickersList');
-                    list.innerHTML = stickers.map(s => `
-                        <div class="flex items-center gap-3 bg-[#0a0e1a] rounded-xl px-3 py-2">
-                            ${s.icon ? `<img src="${s.icon}" class="w-12 h-9 object-contain shrink-0" onerror="this.style.display='none'">` : '<div class="w-12 h-9 shrink-0"></div>'}
-                            <span class="text-gray-300 text-sm">${s.name || 'Sticker'}</span>
-                        </div>
-                    `).join('');
-                    document.getElementById('floatStickersSection').classList.remove('hidden');
-                }
-
-                // Update the float-trigger button text on the card
-                document.querySelectorAll('.float-trigger').forEach(btn => {
-                    if (btn.dataset.mhn === ITEMS.find(i => i.inspect_link === inspectUrl)?.market_hash_name) {
-                        btn.innerHTML = `<span class="font-mono font-bold text-cyan-400 text-[10px]">ƒ</span><span class="text-cyan-400">${fv.toFixed(4)}</span>`;
-                    }
-                });
-
-                document.getElementById('floatData').classList.remove('hidden');
-            } catch(e) {
-                document.getElementById('floatLoading').classList.add('hidden');
-                document.getElementById('floatErrorMsg').textContent = 'Network error — try again.';
-                document.getElementById('floatError').classList.remove('hidden');
+            if (tier) {
+                wearLabel.textContent = wear;
+                wearLabel.style.color = tier.color;
+                rangeLabel.textContent = `Float range: ${tier.min.toFixed(2)} – ${tier.max.toFixed(2)}`;
+                highlight.style.left = tier.left;
+                highlight.style.width = tier.width;
+                highlight.style.borderColor = tier.color;
+            } else {
+                wearLabel.textContent = wear || 'Unknown';
+                wearLabel.style.color = '#9ca3af';
+                rangeLabel.textContent = '';
+                highlight.style.width = '0';
             }
+
+            // Stickers from item data
+            const item = ITEMS.find(i => i.market_hash_name === mhn);
+            if (item && item.stickers && item.stickers.length) {
+                const list = document.getElementById('floatStickersList');
+                list.innerHTML = item.stickers.map(s => `
+                    <div class="flex items-center gap-3 bg-[#0a0e1a] rounded-xl px-3 py-2">
+                        ${s.icon ? `<img src="${s.icon}" class="w-12 h-9 object-contain shrink-0" onerror="this.style.display='none'">` : ''}
+                        <span class="text-gray-300 text-sm">${s.name || 'Sticker'}</span>
+                    </div>
+                `).join('');
+                document.getElementById('floatStickersSection').classList.remove('hidden');
+            }
+
+            // CSFloat link — searches by market hash name
+            const csfloatUrl = 'https://csfloat.com/db?appid=730&market_hash_name=' + encodeURIComponent(mhn);
+            document.getElementById('floatCSFloatBtn').href = csfloatUrl;
+
+            document.getElementById('floatModal').classList.remove('hidden');
         }
 
         function closeFloat() {
