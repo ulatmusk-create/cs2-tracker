@@ -347,9 +347,13 @@ def parse_items(steam_id, inv_data):
         for action in desc.get('actions', []):
             tpl = action.get('link', '')
             if 'csgo_econ_action_preview' in tpl:
-                inspect_link = (tpl
+                link = (tpl
                     .replace('%owner_steamid%', str(steam_id))
                     .replace('%assetid%', str(asset.get('assetid', ''))))
+                # New CS2 inventory format uses %propid:N% — can't be resolved
+                # from the public API, so we can't build a valid inspect link
+                if '%propid' not in link:
+                    inspect_link = link
                 break
 
         name = desc.get('name', 'Unknown')
