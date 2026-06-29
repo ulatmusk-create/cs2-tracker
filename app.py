@@ -23,6 +23,7 @@ app = Flask(__name__)
 
 CACHE_TTL = 3600
 price_cache = {}
+float_cache = {}  # inspect_url -> float data (floats never change, safe to cache forever)
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0'
@@ -282,7 +283,27 @@ def fetch_price(market_hash_name):
     return market_hash_name, 0.0
 
 
-def parse_items(inv_data):
+def parse_stickers(desc_list):
+    stickers = []
+    for entry in desc_list:
+        val = entry.get('value', '')
+        if 'Sticker:' not in val:
+            continue
+        img_urls = re.findall(r'src="([^"]+)"', val)
+        names = re.findall(r'<a[^>]*>([^<]+)</a>', val)
+        if not names:
+            plain = re.sub(r'<[^>]+>', '', val)
+            after = plain.split('Sticker:')[-1]
+            names = [n.strip() for n in after.split(',') if n.strip()]
+        for i, name in enumerate(names):
+            s = {'name': name.strip()}
+            if i < len(img_urls):
+                s['icon'] = img_urls[i]
+            stickers.append(s)
+    return stickers[:4]
+
+
+def parse_items(steam_id, inv_data):
     descriptions = {
         f"{d['classid']}_{d['instanceid']}": d
         for d in inv_data.get('descriptions', [])
@@ -310,11 +331,28 @@ def parse_items(inv_data):
         if desc.get('icon_url'):
             icon = f"https://steamcommunity-a.akamaihd.net/economy/image/{desc['icon_url']}/128x128"
 
+        # Inspect link — substitute assetid and steamid into the template
+        inspect_link = ''
+        for action in desc.get('actions', []):
+            tpl = action.get('link', '')
+            if 'csgo_econ_action_preview' in tpl:
+                inspect_link = (tpl
+                    .replace('%owner_steamid%', str(steam_id))
+                    .replace('%assetid%', str(asset.get('assetid', ''))))
+                break
+
+        name = desc.get('name', 'Unknown')
+        stickers = parse_stickers(desc.get('descriptions', []))
+        is_stattrak = 'StatTrak' in name
+        is_souvenir = 'Souvenir' in name
+        # Knives and gloves have extraordinary rarity color
+        is_special = desc.get('name_color', '').upper() in ('D32CE6', 'ADE55C')
+
         if mhn in seen:
             seen[mhn]['amount'] += 1
         else:
             seen[mhn] = {
-                'name': desc.get('name', 'Unknown'),
+                'name': name,
                 'market_hash_name': mhn,
                 'icon': icon,
                 'rarity_color': rarity_color,
@@ -322,6 +360,11 @@ def parse_items(inv_data):
                 'amount': 1,
                 'price': 0.0,
                 'total': 0.0,
+                'inspect_link': inspect_link,
+                'stickers': stickers,
+                'is_stattrak': is_stattrak,
+                'is_souvenir': is_souvenir,
+                'is_special': is_special,
             }
     return list(seen.values())
 
@@ -412,7 +455,7 @@ def track():
     if not inv_data:
         return render_template('index.html', error=err)
 
-    items = parse_items(inv_data)
+    items = parse_items(steam_id, inv_data)
     if not items:
         return render_template('index.html',
             error="No marketable CS2 items found. Your inventory may be empty or everything is untradable.")
@@ -654,6 +697,65 @@ def check_alerts():
     return jsonify({'alerts_checked': len(active_alerts), 'wishlist_checked': len(active_wishlist), 'triggered': triggered})
 
 
+# ── Float Inspector ───────────────────────────────────────────────────────────
+
+DOPPLER_PHASES = {
+    415: 'Ruby', 416: 'Sapphire', 417: 'Black Pearl',
+    418: 'Phase 1', 419: 'Phase 2', 420: 'Phase 3', 421: 'Phase 4',
+    568: 'Emerald',
+    569: 'Phase 1', 570: 'Phase 2', 571: 'Phase 3', 572: 'Phase 4',
+    575: 'Ruby', 576: 'Sapphire', 577: 'Black Pearl',
+    580: 'Phase 1', 581: 'Phase 2', 582: 'Phase 3', 583: 'Phase 4',
+    584: 'Emerald',
+}
+
+@app.route('/api/float')
+def get_float():
+    inspect_url = request.args.get('url', '').strip()
+    if not inspect_url or 'csgo_econ_action_preview' not in inspect_url:
+        return jsonify({'error': 'Invalid inspect link'}), 400
+
+    if inspect_url in float_cache:
+        return jsonify(float_cache[inspect_url])
+
+    try:
+        r = requests.get('https://api.csfloat.com/', params={'url': inspect_url},
+                        headers=HEADERS, timeout=12)
+        if r.status_code == 200:
+            info = r.json().get('iteminfo', {})
+            phase = DOPPLER_PHASES.get(info.get('paintindex'))
+            # Build sticker icon URLs from material paths
+            stickers = []
+            for s in info.get('stickers', []):
+                entry = {'name': s.get('name', '')}
+                mat = s.get('material', '')
+                if mat:
+                    entry['icon'] = f"https://steamcdn-a.akamaihd.net/apps/730/icons/econ/stickers/{mat}.png"
+                stickers.append(entry)
+            result = {
+                'float': info.get('floatvalue'),
+                'seed': info.get('paintseed'),
+                'min': info.get('min'),
+                'max': info.get('max'),
+                'phase': phase,
+                'stickers': stickers,
+                'wear_name': info.get('wear_name', ''),
+                'full_name': info.get('full_item_name', ''),
+            }
+            float_cache[inspect_url] = result
+            return jsonify(result)
+        elif r.status_code == 429:
+            return jsonify({'error': 'Rate limited — wait a few seconds and try again'}), 429
+        elif r.status_code == 404:
+            return jsonify({'error': 'Item not found — may be a non-inspectable item'}), 404
+        else:
+            return jsonify({'error': f'Float service returned {r.status_code}'}), 502
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'Request timed out — try again'}), 504
+    except Exception as e:
+        return jsonify({'error': 'Failed to fetch float data'}), 500
+
+
 # ── Pricing & Stripe ──────────────────────────────────────────────────────────
 
 @app.route('/pricing')
@@ -767,7 +869,7 @@ def export_csv(steam_id):
     if not inv_data:
         return err or 'Failed', 400
 
-    items = parse_items(inv_data)
+    items = parse_items(steam_id, inv_data)
     unique_names = list({item['market_hash_name'] for item in items})
     prices = {}
     with ThreadPoolExecutor(max_workers=4) as executor:
