@@ -29,8 +29,19 @@
             <div class="flex items-center gap-4">
                 <a href="/wishlist" class="text-sm text-gray-500 hover:text-orange-400 transition-colors">Wishlist</a>
                 <a href="/my-alerts" class="text-sm text-gray-500 hover:text-orange-400 transition-colors">My Alerts</a>
-                <a href="/" class="text-sm text-gray-500 hover:text-orange-400 transition-colors">← Track another</a>
                 <a href="/pricing" class="text-sm bg-orange-500 hover:bg-orange-400 text-white font-semibold px-4 py-1.5 rounded-lg transition-colors">Pro ✦</a>
+                {% if user %}
+                <div class="flex items-center gap-2 border-l border-white/10 pl-4">
+                    <img src="{{ user.avatar }}" class="w-7 h-7 rounded-full border border-white/10" onerror="this.style.display='none'">
+                    <span class="text-gray-400 text-sm">{{ user.username }}</span>
+                    <a href="/logout" class="text-gray-600 hover:text-gray-400 text-sm transition-colors">↩</a>
+                </div>
+                {% else %}
+                <a href="/login" class="flex items-center gap-1.5 text-sm text-gray-500 hover:text-white border border-white/10 hover:border-white/20 px-3 py-1.5 rounded-lg transition-all">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0z"/></svg>
+                    Sign in
+                </a>
+                {% endif %}
             </div>
         </div>
     </nav>

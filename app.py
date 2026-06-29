@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, Response
+from flask import Flask, render_template, request, jsonify, Response, session, redirect, url_for
 import requests
 import re
 import time
@@ -20,6 +20,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))
 
 CACHE_TTL = 3600
 price_cache = {}
@@ -134,6 +135,16 @@ def init_db():
                 market_hash_name TEXT NOT NULL,
                 buy_price REAL NOT NULL,
                 updated_at TEXT
+            )
+        ''')
+        cur.execute(f'''
+            CREATE TABLE IF NOT EXISTS users (
+                id {pk},
+                steam_id TEXT UNIQUE NOT NULL,
+                username TEXT,
+                avatar TEXT,
+                created_at TEXT,
+                last_login TEXT
             )
         ''')
 
@@ -437,27 +448,59 @@ def send_alert_email(to_email, skin_name, threshold, current_price):
         return False
 
 
+# ── Steam auth helpers ────────────────────────────────────────────────────────
+
+def fetch_steam_user(steam_id):
+    try:
+        api_key = os.getenv('STEAM_API_KEY', '')
+        if api_key:
+            r = requests.get(
+                'https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/',
+                params={'key': api_key, 'steamids': steam_id}, timeout=6
+            )
+            if r.status_code == 200:
+                players = r.json().get('response', {}).get('players', [])
+                if players:
+                    return players[0].get('personaname', 'Player'), players[0].get('avatarmedium', '')
+        # Fallback: XML profile
+        r = requests.get(f"https://steamcommunity.com/profiles/{steam_id}/?xml=1",
+                        headers=HEADERS, timeout=6)
+        if r.status_code == 200 and '<steamID>' in r.text:
+            root = ET.fromstring(r.text)
+            name = root.findtext('steamID') or 'Player'
+            avatar = root.findtext('avatarMedium') or ''
+            return name, avatar
+    except Exception:
+        pass
+    return 'Player', ''
+
+
+def get_current_user():
+    if 'steam_id' not in session:
+        return None
+    return {
+        'steam_id': session['steam_id'],
+        'username': session.get('username', 'Player'),
+        'avatar': session.get('avatar', ''),
+    }
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    user = get_current_user()
+    return render_template('index.html', user=user)
 
 
-@app.route('/track', methods=['POST'])
-def track():
-    profile = request.form.get('profile', '').strip()
-    steam_id, err = extract_steam_id(profile)
-    if not steam_id:
-        return render_template('index.html', error=err)
-
+def do_track(steam_id):
     inv_data, err = fetch_inventory(steam_id)
     if not inv_data:
-        return render_template('index.html', error=err)
+        return render_template('index.html', error=err, user=get_current_user())
 
     items = parse_items(steam_id, inv_data)
     if not items:
-        return render_template('index.html',
+        return render_template('index.html', user=get_current_user(),
             error="No marketable CS2 items found. Your inventory may be empty or everything is untradable.")
 
     unique_names = list({item['market_hash_name'] for item in items})
@@ -485,12 +528,85 @@ def track():
         history = [{'value': float(r['total_value']), 'date': r['recorded_at'][:10]} for r in cur.fetchall()]
 
     return render_template('dashboard.html',
-        items=items,
-        total=total,
-        steam_id=steam_id,
-        count=len(items),
-        top_item=items[0] if items else None,
-        history=history)
+        items=items, total=total, steam_id=steam_id,
+        count=len(items), top_item=items[0] if items else None,
+        history=history, user=get_current_user())
+
+
+@app.route('/track', methods=['POST'])
+def track():
+    profile = request.form.get('profile', '').strip()
+    steam_id, err = extract_steam_id(profile)
+    if not steam_id:
+        return render_template('index.html', error=err, user=get_current_user())
+    return do_track(steam_id)
+
+
+@app.route('/me')
+def me():
+    user = get_current_user()
+    if not user:
+        return redirect('/')
+    return do_track(user['steam_id'])
+
+
+# ── Steam OpenID login ────────────────────────────────────────────────────────
+
+STEAM_OPENID = 'https://steamcommunity.com/openid/login'
+
+@app.route('/login')
+def login():
+    params = {
+        'openid.ns': 'http://specs.openid.net/auth/2.0',
+        'openid.mode': 'checkid_setup',
+        'openid.return_to': request.host_url.rstrip('/') + '/auth/callback',
+        'openid.realm': request.host_url,
+        'openid.identity': 'http://specs.openid.net/auth/2.0/identifier_select',
+        'openid.claimed_id': 'http://specs.openid.net/auth/2.0/identifier_select',
+    }
+    return redirect(STEAM_OPENID + '?' + requests.compat.urlencode(params))
+
+
+@app.route('/auth/callback')
+def auth_callback():
+    claimed_id = request.args.get('openid.claimed_id', '')
+    match = re.search(r'steamcommunity\.com/openid/id/(\d{17})', claimed_id)
+    if not match:
+        return redirect('/?error=login_failed')
+
+    steam_id = match.group(1)
+
+    # Verify with Steam that this login is genuine
+    verify_params = dict(request.args)
+    verify_params['openid.mode'] = 'check_authentication'
+    try:
+        vr = requests.post(STEAM_OPENID, data=verify_params, timeout=8)
+        if 'is_valid:true' not in vr.text:
+            return redirect('/?error=login_failed')
+    except Exception:
+        return redirect('/?error=login_failed')
+
+    username, avatar = fetch_steam_user(steam_id)
+
+    with db() as cur:
+        cur.execute(f"SELECT id FROM users WHERE steam_id={P}", (steam_id,))
+        if cur.fetchone():
+            cur.execute(f"UPDATE users SET username={P}, avatar={P}, last_login={P} WHERE steam_id={P}",
+                       (username, avatar, datetime.now().isoformat(), steam_id))
+        else:
+            cur.execute(f"INSERT INTO users (steam_id, username, avatar, created_at, last_login) VALUES ({P},{P},{P},{P},{P})",
+                       (steam_id, username, avatar, datetime.now().isoformat(), datetime.now().isoformat()))
+
+    session['steam_id'] = steam_id
+    session['username'] = username
+    session['avatar'] = avatar
+    return redirect('/me')
+
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect('/')
 
 
 # ── Share ─────────────────────────────────────────────────────────────────────
