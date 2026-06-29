@@ -12,13 +12,13 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = Flask(__name__)
 
-DB_PATH = 'tracker.db'
 CACHE_TTL = 3600
 price_cache = {}
 
@@ -26,58 +26,83 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0'
 }
 
+DATABASE_URL = os.getenv('DATABASE_URL')
+USE_POSTGRES = bool(DATABASE_URL)
+P = '%s' if USE_POSTGRES else '?'  # SQL placeholder
+
+if USE_POSTGRES:
+    import psycopg2
+    import psycopg2.extras
+
+@contextmanager
+def db():
+    if USE_POSTGRES:
+        conn = psycopg2.connect(DATABASE_URL)
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    else:
+        conn = sqlite3.connect('tracker.db')
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+    try:
+        yield cur
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
 
 # ── Database ──────────────────────────────────────────────────────────────────
 
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS alerts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT NOT NULL,
-            market_hash_name TEXT NOT NULL,
-            skin_name TEXT NOT NULL,
-            threshold_price REAL NOT NULL,
-            current_price REAL DEFAULT 0,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            last_checked TEXT,
-            triggered INTEGER DEFAULT 0
-        )
-    ''')
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS snapshots (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            steam_id TEXT NOT NULL,
-            total_value REAL NOT NULL,
-            item_count INTEGER NOT NULL,
-            recorded_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS shares (
-            id TEXT PRIMARY KEY,
-            steam_id TEXT NOT NULL,
-            total_value REAL NOT NULL,
-            item_count INTEGER NOT NULL,
-            items_json TEXT NOT NULL,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS wishlist (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT NOT NULL,
-            market_hash_name TEXT NOT NULL,
-            skin_name TEXT NOT NULL,
-            target_price REAL NOT NULL,
-            current_price REAL DEFAULT 0,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            last_checked TEXT,
-            triggered INTEGER DEFAULT 0
-        )
-    ''')
-    conn.commit()
-    conn.close()
+    pk = 'SERIAL PRIMARY KEY' if USE_POSTGRES else 'INTEGER PRIMARY KEY AUTOINCREMENT'
+    with db() as cur:
+        cur.execute(f'''
+            CREATE TABLE IF NOT EXISTS alerts (
+                id {pk},
+                email TEXT NOT NULL,
+                market_hash_name TEXT NOT NULL,
+                skin_name TEXT NOT NULL,
+                threshold_price REAL NOT NULL,
+                current_price REAL DEFAULT 0,
+                created_at TEXT,
+                last_checked TEXT,
+                triggered INTEGER DEFAULT 0
+            )
+        ''')
+        cur.execute(f'''
+            CREATE TABLE IF NOT EXISTS snapshots (
+                id {pk},
+                steam_id TEXT NOT NULL,
+                total_value REAL NOT NULL,
+                item_count INTEGER NOT NULL,
+                recorded_at TEXT
+            )
+        ''')
+        cur.execute(f'''
+            CREATE TABLE IF NOT EXISTS shares (
+                id TEXT PRIMARY KEY,
+                steam_id TEXT NOT NULL,
+                total_value REAL NOT NULL,
+                item_count INTEGER NOT NULL,
+                items_json TEXT NOT NULL,
+                created_at TEXT
+            )
+        ''')
+        cur.execute(f'''
+            CREATE TABLE IF NOT EXISTS wishlist (
+                id {pk},
+                email TEXT NOT NULL,
+                market_hash_name TEXT NOT NULL,
+                skin_name TEXT NOT NULL,
+                target_price REAL NOT NULL,
+                current_price REAL DEFAULT 0,
+                created_at TEXT,
+                last_checked TEXT,
+                triggered INTEGER DEFAULT 0
+            )
+        ''')
 
 init_db()
 
@@ -270,19 +295,13 @@ def search_steam_market(query):
 
 
 def save_snapshot(steam_id, total, count):
-    conn = sqlite3.connect(DB_PATH)
     today = datetime.now().strftime('%Y-%m-%d')
-    last = conn.execute(
-        "SELECT recorded_at FROM snapshots WHERE steam_id=? ORDER BY recorded_at DESC LIMIT 1",
-        (steam_id,)
-    ).fetchone()
-    if not last or last[0][:10] != today:
-        conn.execute(
-            "INSERT INTO snapshots (steam_id, total_value, item_count) VALUES (?,?,?)",
-            (steam_id, total, count)
-        )
-        conn.commit()
-    conn.close()
+    with db() as cur:
+        cur.execute(f"SELECT recorded_at FROM snapshots WHERE steam_id={P} ORDER BY recorded_at DESC LIMIT 1", (steam_id,))
+        last = cur.fetchone()
+        if not last or last['recorded_at'][:10] != today:
+            cur.execute(f"INSERT INTO snapshots (steam_id, total_value, item_count, recorded_at) VALUES ({P},{P},{P},{P})",
+                       (steam_id, total, count, datetime.now().isoformat()))
 
 
 # ── Email ─────────────────────────────────────────────────────────────────────
@@ -366,12 +385,9 @@ def track():
 
     save_snapshot(steam_id, total, len(items))
 
-    conn = sqlite3.connect(DB_PATH)
-    history = conn.execute(
-        "SELECT total_value, recorded_at FROM snapshots WHERE steam_id=? ORDER BY recorded_at ASC",
-        (steam_id,)
-    ).fetchall()
-    conn.close()
+    with db() as cur:
+        cur.execute(f"SELECT total_value, recorded_at FROM snapshots WHERE steam_id={P} ORDER BY recorded_at ASC", (steam_id,))
+        history = cur.fetchall()
 
     return render_template('dashboard.html',
         items=items,
@@ -392,23 +408,20 @@ def create_share():
         {k: v for k, v in item.items() if k != 'market_hash_name'}
         for item in (data.get('items') or [])
     ]
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute(
-        "INSERT INTO shares (id, steam_id, total_value, item_count, items_json) VALUES (?,?,?,?,?)",
-        (share_id, data.get('steam_id', ''), data.get('total_value', 0),
-         data.get('item_count', 0), json.dumps(items_to_store))
-    )
-    conn.commit()
-    conn.close()
+    with db() as cur:
+        cur.execute(
+            f"INSERT INTO shares (id, steam_id, total_value, item_count, items_json, created_at) VALUES ({P},{P},{P},{P},{P},{P})",
+            (share_id, data.get('steam_id', ''), data.get('total_value', 0),
+             data.get('item_count', 0), json.dumps(items_to_store), datetime.now().isoformat())
+        )
     return jsonify({'share_id': share_id})
 
 
 @app.route('/share/<share_id>')
 def view_share(share_id):
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    share = conn.execute("SELECT * FROM shares WHERE id=?", (share_id,)).fetchone()
-    conn.close()
+    with db() as cur:
+        cur.execute(f"SELECT * FROM shares WHERE id={P}", (share_id,))
+        share = cur.fetchone()
     if not share:
         return render_template('index.html', error="Share link not found or expired.")
     items = json.loads(share['items_json'])
@@ -419,13 +432,10 @@ def view_share(share_id):
 
 @app.route('/api/history/<steam_id>')
 def get_history(steam_id):
-    conn = sqlite3.connect(DB_PATH)
-    rows = conn.execute(
-        "SELECT total_value, item_count, recorded_at FROM snapshots WHERE steam_id=? ORDER BY recorded_at ASC",
-        (steam_id,)
-    ).fetchall()
-    conn.close()
-    return jsonify([{'value': r[0], 'count': r[1], 'date': r[2][:10]} for r in rows])
+    with db() as cur:
+        cur.execute(f"SELECT total_value, item_count, recorded_at FROM snapshots WHERE steam_id={P} ORDER BY recorded_at ASC", (steam_id,))
+        rows = cur.fetchall()
+    return jsonify([{'value': r['total_value'], 'count': r['item_count'], 'date': r['recorded_at'][:10]} for r in rows])
 
 
 # ── Wishlist ──────────────────────────────────────────────────────────────────
@@ -435,13 +445,9 @@ def wishlist():
     email = request.args.get('email', '').strip()
     items = []
     if email:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        items = conn.execute(
-            "SELECT * FROM wishlist WHERE email=? ORDER BY created_at DESC",
-            (email,)
-        ).fetchall()
-        conn.close()
+        with db() as cur:
+            cur.execute(f"SELECT * FROM wishlist WHERE email={P} ORDER BY created_at DESC", (email,))
+            items = cur.fetchall()
     return render_template('wishlist.html', items=items, email=email)
 
 
@@ -487,22 +493,18 @@ def add_wishlist():
     except (ValueError, TypeError):
         return jsonify({'success': False, 'error': 'Invalid price'}), 400
 
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute(
-        "INSERT INTO wishlist (email, market_hash_name, skin_name, target_price, current_price, created_at) VALUES (?,?,?,?,?,?)",
-        (email, mhn, skin_name, target_price, float(current_price), datetime.now().isoformat())
-    )
-    conn.commit()
-    conn.close()
+    with db() as cur:
+        cur.execute(
+            f"INSERT INTO wishlist (email, market_hash_name, skin_name, target_price, current_price, created_at) VALUES ({P},{P},{P},{P},{P},{P})",
+            (email, mhn, skin_name, target_price, float(current_price), datetime.now().isoformat())
+        )
     return jsonify({'success': True})
 
 
 @app.route('/wishlist/delete/<int:item_id>', methods=['POST'])
 def delete_wishlist(item_id):
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("DELETE FROM wishlist WHERE id=?", (item_id,))
-    conn.commit()
-    conn.close()
+    with db() as cur:
+        cur.execute(f"DELETE FROM wishlist WHERE id={P}", (item_id,))
     return jsonify({'success': True})
 
 
@@ -527,22 +529,18 @@ def create_alert():
     except (ValueError, TypeError):
         return jsonify({'success': False, 'error': 'Invalid price'}), 400
 
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute(
-        "INSERT INTO alerts (email, market_hash_name, skin_name, threshold_price, created_at) VALUES (?,?,?,?,?)",
-        (email, mhn, skin_name, threshold, datetime.now().isoformat())
-    )
-    conn.commit()
-    conn.close()
+    with db() as cur:
+        cur.execute(
+            f"INSERT INTO alerts (email, market_hash_name, skin_name, threshold_price, created_at) VALUES ({P},{P},{P},{P},{P})",
+            (email, mhn, skin_name, threshold, datetime.now().isoformat())
+        )
     return jsonify({'success': True})
 
 
 @app.route('/alerts/delete/<int:alert_id>', methods=['POST'])
 def delete_alert(alert_id):
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("DELETE FROM alerts WHERE id=?", (alert_id,))
-    conn.commit()
-    conn.close()
+    with db() as cur:
+        cur.execute(f"DELETE FROM alerts WHERE id={P}", (alert_id,))
     return jsonify({'success': True})
 
 
@@ -551,37 +549,33 @@ def my_alerts():
     email = request.args.get('email', '').strip()
     alerts = []
     if email:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        alerts = conn.execute(
-            "SELECT * FROM alerts WHERE email=? ORDER BY created_at DESC", (email,)
-        ).fetchall()
-        conn.close()
+        with db() as cur:
+            cur.execute(f"SELECT * FROM alerts WHERE email={P} ORDER BY created_at DESC", (email,))
+            alerts = cur.fetchall()
     return render_template('alerts.html', alerts=alerts, email=email)
 
 
 @app.route('/check-alerts')
 def check_alerts():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    active_alerts = conn.execute("SELECT * FROM alerts WHERE triggered=0").fetchall()
-    active_wishlist = conn.execute("SELECT * FROM wishlist WHERE triggered=0").fetchall()
-    triggered = 0
+    with db() as cur:
+        cur.execute("SELECT * FROM alerts WHERE triggered=0")
+        active_alerts = cur.fetchall()
+        cur.execute("SELECT * FROM wishlist WHERE triggered=0")
+        active_wishlist = cur.fetchall()
 
+    triggered = 0
     for item in list(active_alerts) + list(active_wishlist):
         _, price = fetch_price(item['market_hash_name'])
-        table = 'alerts' if 'threshold_price' in item.keys() else 'wishlist'
-        conn.execute(f"UPDATE {table} SET current_price=?, last_checked=? WHERE id=?",
-                     (price, datetime.now().isoformat(), item['id']))
-        conn.commit()
-        if price > 0 and price <= item['threshold_price']:
-            sent = send_alert_email(item['email'], item['skin_name'], item['threshold_price'], price)
-            if sent:
-                conn.execute(f"UPDATE {table} SET triggered=1 WHERE id=?", (item['id'],))
-                conn.commit()
-                triggered += 1
+        table = 'alerts' if 'threshold_price' in dict(item) else 'wishlist'
+        with db() as cur:
+            cur.execute(f"UPDATE {table} SET current_price={P}, last_checked={P} WHERE id={P}",
+                       (price, datetime.now().isoformat(), item['id']))
+            if price > 0 and price <= item['threshold_price']:
+                sent = send_alert_email(item['email'], item['skin_name'], item['threshold_price'], price)
+                if sent:
+                    cur.execute(f"UPDATE {table} SET triggered=1 WHERE id={P}", (item['id'],))
+                    triggered += 1
 
-    conn.close()
     return jsonify({'alerts_checked': len(active_alerts), 'wishlist_checked': len(active_wishlist), 'triggered': triggered})
 
 
