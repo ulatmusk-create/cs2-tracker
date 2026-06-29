@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CS2 Inventory — ${{ "%.2f"|format(total) }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #080c18; }
+        .skin-card { background: linear-gradient(160deg, #111827 0%, #0f1a2e 100%); transition: transform 0.15s ease, border-color 0.15s ease; }
+        .skin-card:hover { transform: translateY(-3px); }
+        .skin-card:hover .card-actions { opacity: 1; }
+        .card-actions { opacity: 0; transition: opacity 0.15s; }
+        .item-name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .value-badge { background: rgba(52,211,153,0.08); border: 1px solid rgba(52,211,153,0.15); }
+    </style>
+</head>
+<body class="min-h-screen text-gray-200">
+
+    <nav class="border-b border-white/5 px-6 py-4">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <a href="/" class="flex items-center gap-1.5">
+                <span class="text-orange-500 font-black text-xl">CS2</span>
+                <span class="text-white font-bold text-xl">Tracker</span>
+            </a>
+            <div class="flex items-center gap-4">
+                <a href="/wishlist" class="text-sm text-gray-500 hover:text-orange-400 transition-colors">Wishlist</a>
+                <a href="/my-alerts" class="text-sm text-gray-500 hover:text-orange-400 transition-colors">My Alerts</a>
+                <a href="/" class="text-sm text-gray-500 hover:text-orange-400 transition-colors">← Track another</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Stats Header -->
+    <div class="border-b border-white/5" style="background:linear-gradient(135deg,#0f1a2e 0%,#111827 100%);">
+        <div class="max-w-7xl mx-auto px-6 py-10">
+            <p class="text-gray-600 text-xs mb-4 font-mono">Steam ID: {{ steam_id }}</p>
+            <div class="flex flex-wrap items-end gap-8">
+                <div>
+                    <p class="text-gray-500 text-sm mb-1">Total Inventory Value</p>
+                    <p class="text-5xl font-black text-white tracking-tight">${{ "%.2f"|format(total) }}</p>
+                </div>
+                <div class="border-l border-white/5 pl-8">
+                    <p class="text-gray-500 text-sm mb-1">Marketable Items</p>
+                    <p class="text-3xl font-bold text-white">{{ count }}</p>
+                </div>
+                {% if top_item and top_item.total > 0 %}
+                <div class="border-l border-white/5 pl-8">
+                    <p class="text-gray-500 text-sm mb-1">Most Valuable</p>
+                    <p class="text-xl font-bold text-orange-400">${{ "%.2f"|format(top_item.total) }}</p>
+                    <p class="text-gray-600 text-xs mt-0.5 max-w-xs truncate">{{ top_item.name }}</p>
+                </div>
+                {% endif %}
+                <div class="ml-auto flex gap-3">
+                    <button onclick="shareInventory()"
+                            class="flex items-center gap-2 border border-white/10 hover:border-orange-500/50 text-gray-400 hover:text-orange-400 text-sm font-medium px-4 py-2.5 rounded-xl transition-all">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+                        Share Inventory
+                    </button>
+                    <a href="/" class="bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors">
+                        Check Another
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Portfolio Chart -->
+    {% if history and history|length >= 2 %}
+    <div class="max-w-7xl mx-auto px-6 pt-6">
+        <div class="bg-[#111827] border border-white/5 rounded-2xl p-5">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h3 class="text-white font-semibold">Portfolio Value History</h3>
+                    <p class="text-gray-600 text-xs mt-0.5">{{ history|length }} snapshots recorded</p>
+                </div>
+                {% set first_val = history[0][0] %}
+                {% set last_val = history[-1][0] %}
+                {% set diff = last_val - first_val %}
+                <div class="text-right">
+                    <p class="text-xs text-gray-500">Since first tracked</p>
+                    <p class="font-bold {% if diff >= 0 %}text-emerald-400{% else %}text-red-400{% endif %}">
+                        {% if diff >= 0 %}+{% endif %}${{ "%.2f"|format(diff) }}
+                    </p>
+                </div>
+            </div>
+            <div style="height: 140px;">
+                <canvas id="portfolioChart"></canvas>
+            </div>
+        </div>
+    </div>
+    {% elif history and history|length == 1 %}
+    <div class="max-w-7xl mx-auto px-6 pt-6">
+        <div class="bg-[#111827] border border-white/5 rounded-2xl px-5 py-4 flex items-center gap-3">
+            <span class="text-2xl">📈</span>
+            <div>
+                <p class="text-white text-sm font-semibold">Portfolio tracking started</p>
+                <p class="text-gray-600 text-xs">Come back tomorrow to see your value history chart.</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Subheader -->
+    <div class="max-w-7xl mx-auto px-6 py-4 mt-4 border-b border-white/5 flex items-center justify-between">
+        <p class="text-gray-600 text-sm">
+            <span class="text-white font-semibold">{{ count }}</span> items · sorted by value · hover a card to set alert or add to wishlist
+        </p>
+    </div>
+
+    <!-- Grid -->
+    <div class="max-w-7xl mx-auto px-6 py-8">
+        {% if items %}
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+            {% for item in items %}
+            <div class="skin-card rounded-xl overflow-hidden border border-white/5 relative"
+                 style="border-top: 3px solid {{ item.rarity_color }};">
+
+                <!-- Action buttons -->
+                <div class="card-actions absolute top-2 right-1 flex gap-1 z-10">
+                    <button title="Set price alert"
+                        class="bg-black/60 hover:bg-orange-500 text-white rounded-lg p-1.5 transition-colors"
+                        onclick="openAlert({{ item.market_hash_name|tojson }}, {{ item.name|tojson }}, {{ item.price }})">
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                    </button>
+                    <button title="Add to wishlist"
+                        class="bg-black/60 hover:bg-pink-500 text-white rounded-lg p-1.5 transition-colors"
+                        onclick="openWishlist({{ item.market_hash_name|tojson }}, {{ item.name|tojson }}, {{ item.price }})">
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                    </button>
+                </div>
+
+                <!-- Image -->
+                <div class="flex items-center justify-center p-3" style="background:rgba(0,0,0,0.3);min-height:90px;">
+                    {% if item.icon %}
+                    <img src="{{ item.icon }}" alt="{{ item.name }}" class="w-20 h-16 object-contain" loading="lazy" onerror="this.style.display='none'">
+                    {% endif %}
+                </div>
+
+                <!-- Info -->
+                <div class="p-3">
+                    <p class="item-name text-white text-xs font-semibold leading-snug mb-1">{{ item.name }}</p>
+                    {% if item.wear %}<p class="text-gray-600 text-xs mb-2 truncate">{{ item.wear }}</p>{% else %}<div class="mb-2"></div>{% endif %}
+                    {% if item.total > 0 %}
+                    <div class="value-badge rounded-lg px-2 py-1 text-center">
+                        <span class="text-emerald-400 font-bold text-sm">${{ "%.2f"|format(item.total) }}</span>
+                    </div>
+                    {% if item.amount > 1 %}
+                    <p class="text-gray-600 text-xs mt-1 text-center">×{{ item.amount }} · ${{ "%.2f"|format(item.price) }} ea</p>
+                    {% endif %}
+                    {% else %}
+                    <div class="text-center py-1"><span class="text-gray-700 text-xs">—</span></div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <p class="text-center text-gray-700 text-xs mt-12">Prices from Steam Community Market · Approximate values only</p>
+    </div>
+
+    <!-- Share Modal -->
+    <div id="shareModal" class="fixed inset-0 bg-black/75 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeShare()">
+        <div class="bg-[#111827] border border-[#1e2d3d] rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <div id="shareLoading" class="text-center py-4">
+                <svg class="animate-spin h-8 w-8 text-orange-500 mx-auto mb-3" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <p class="text-gray-400 text-sm">Generating share link...</p>
+            </div>
+            <div id="shareReady" class="hidden">
+                <h3 class="text-white font-bold text-lg mb-1">Share your inventory</h3>
+                <p class="text-gray-500 text-sm mb-4">Anyone with this link can see your inventory value.</p>
+                <div class="flex gap-2 mb-4">
+                    <input id="shareUrl" type="text" readonly
+                           class="flex-1 bg-[#0a0e1a] border border-white/10 rounded-xl px-3 py-2 text-gray-300 text-xs focus:outline-none">
+                    <button onclick="copyShare()" id="copyBtn"
+                            class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-2 rounded-xl text-xs font-bold transition-colors whitespace-nowrap">
+                        Copy
+                    </button>
+                </div>
+                <button onclick="closeShare()" class="w-full border border-white/10 text-gray-400 rounded-xl py-2 text-sm hover:border-white/20 transition-colors">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Modal -->
+    <div id="alertModal" class="fixed inset-0 bg-black/75 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeAlert()">
+        <div class="bg-[#111827] border border-[#1e2d3d] rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <div id="alertForm">
+                <h3 class="text-white font-bold text-lg mb-0.5">Set Price Alert</h3>
+                <p id="alertSkinLabel" class="text-gray-500 text-sm mb-5 truncate"></p>
+                <div class="mb-4">
+                    <label class="text-gray-400 text-xs font-medium mb-1.5 block uppercase tracking-wide">Your Email</label>
+                    <input type="email" id="alertEmail" placeholder="you@email.com"
+                           class="w-full bg-[#0a0e1a] border border-white/10 rounded-xl px-4 py-2.5 text-gray-100 text-sm focus:outline-none focus:border-orange-500 transition-colors placeholder-gray-700">
+                </div>
+                <div class="mb-6">
+                    <label class="text-gray-400 text-xs font-medium mb-1.5 block uppercase tracking-wide">Alert when price drops below</label>
+                    <div class="relative">
+                        <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-semibold">$</span>
+                        <input type="number" id="alertThreshold" step="0.01" min="0.01"
+                               class="w-full bg-[#0a0e1a] border border-white/10 rounded-xl pl-8 pr-4 py-2.5 text-gray-100 text-sm focus:outline-none focus:border-orange-500 transition-colors">
+                    </div>
+                    <p id="alertCurrentPrice" class="text-gray-600 text-xs mt-1.5"></p>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="closeAlert()" class="flex-1 border border-white/10 text-gray-400 rounded-xl py-2.5 text-sm hover:border-white/20 transition-colors">Cancel</button>
+                    <button onclick="submitAlert()" class="flex-1 bg-orange-500 hover:bg-orange-600 text-white rounded-xl py-2.5 text-sm font-bold transition-colors">Set Alert</button>
+                </div>
+                <p id="alertError" class="text-red-400 text-xs mt-3 hidden"></p>
+            </div>
+            <div id="alertSuccess" class="hidden text-center py-4">
+                <div class="text-4xl mb-3">🔔</div>
+                <p class="text-white font-bold mb-1">Alert Set!</p>
+                <p class="text-gray-500 text-sm mb-5">We'll email you when the price drops.</p>
+                <button onclick="closeAlert()" class="bg-orange-500 text-white px-6 py-2.5 rounded-xl text-sm font-bold">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Wishlist Modal -->
+    <div id="wishlistModal" class="fixed inset-0 bg-black/75 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeWishlist()">
+        <div class="bg-[#111827] border border-[#1e2d3d] rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <div id="wishlistForm">
+                <h3 class="text-white font-bold text-lg mb-0.5">Add to Wishlist</h3>
+                <p id="wishlistSkinLabel" class="text-gray-500 text-sm mb-5 truncate"></p>
+                <div class="mb-4">
+                    <label class="text-gray-400 text-xs font-medium mb-1.5 block uppercase tracking-wide">Your Email</label>
+                    <input type="email" id="wishlistEmail" placeholder="you@email.com"
+                           class="w-full bg-[#0a0e1a] border border-white/10 rounded-xl px-4 py-2.5 text-gray-100 text-sm focus:outline-none focus:border-pink-500 transition-colors placeholder-gray-700">
+                </div>
+                <div class="mb-6">
+                    <label class="text-gray-400 text-xs font-medium mb-1.5 block uppercase tracking-wide">Buy it if price drops to</label>
+                    <div class="relative">
+                        <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-semibold">$</span>
+                        <input type="number" id="wishlistTarget" step="0.01" min="0.01"
+                               class="w-full bg-[#0a0e1a] border border-white/10 rounded-xl pl-8 pr-4 py-2.5 text-gray-100 text-sm focus:outline-none focus:border-pink-500 transition-colors">
+                    </div>
+                    <p id="wishlistCurrentPrice" class="text-gray-600 text-xs mt-1.5"></p>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="closeWishlist()" class="flex-1 border border-white/10 text-gray-400 rounded-xl py-2.5 text-sm hover:border-white/20 transition-colors">Cancel</button>
+                    <button onclick="submitWishlist()" class="flex-1 bg-pink-500 hover:bg-pink-600 text-white rounded-xl py-2.5 text-sm font-bold transition-colors">Add to Wishlist</button>
+                </div>
+                <p id="wishlistError" class="text-red-400 text-xs mt-3 hidden"></p>
+            </div>
+            <div id="wishlistSuccess" class="hidden text-center py-4">
+                <div class="text-4xl mb-3">♡</div>
+                <p class="text-white font-bold mb-1">Added to Wishlist!</p>
+                <p class="text-gray-500 text-sm mb-5">We'll alert you when it hits your target price.</p>
+                <button onclick="closeWishlist()" class="bg-pink-500 text-white px-6 py-2.5 rounded-xl text-sm font-bold">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const STEAM_ID = "{{ steam_id }}";
+        const TOTAL_VALUE = {{ total }};
+        const ITEM_COUNT = {{ count }};
+        const ITEMS = {{ items | tojson }};
+        const HISTORY = {{ history | tojson }};
+
+        // ── Portfolio Chart ───────────────────────────────────────────────────
+        if (HISTORY.length >= 2) {
+            const ctx = document.getElementById('portfolioChart');
+            if (ctx) {
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: HISTORY.map(h => h[1] ? h[1].slice(0,10) : ''),
+                        datasets: [{
+                            data: HISTORY.map(h => h[0]),
+                            borderColor: '#f97316',
+                            backgroundColor: 'rgba(249,115,22,0.08)',
+                            borderWidth: 2,
+                            pointRadius: 3,
+                            pointBackgroundColor: '#f97316',
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4b5563', font: { size: 10 } } },
+                            y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4b5563', font: { size: 10 }, callback: v => '$' + v.toLocaleString() } }
+                        }
+                    }
+                });
+            }
+        }
+
+        // ── Share ─────────────────────────────────────────────────────────────
+        async function shareInventory() {
+            document.getElementById('shareModal').classList.remove('hidden');
+            document.getElementById('shareLoading').classList.remove('hidden');
+            document.getElementById('shareReady').classList.add('hidden');
+
+            const res = await fetch('/share/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ steam_id: STEAM_ID, total_value: TOTAL_VALUE, item_count: ITEM_COUNT, items: ITEMS })
+            });
+            const data = await res.json();
+            const url = window.location.origin + '/share/' + data.share_id;
+            document.getElementById('shareUrl').value = url;
+            document.getElementById('shareLoading').classList.add('hidden');
+            document.getElementById('shareReady').classList.remove('hidden');
+        }
+        function closeShare() { document.getElementById('shareModal').classList.add('hidden'); }
+        async function copyShare() {
+            const url = document.getElementById('shareUrl').value;
+            await navigator.clipboard.writeText(url);
+            const btn = document.getElementById('copyBtn');
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = 'Copy', 2000);
+        }
+
+        // ── Price Alert ───────────────────────────────────────────────────────
+        let alertMhn = '', alertSkinName = '';
+        function openAlert(mhn, name, price) {
+            alertMhn = mhn; alertSkinName = name;
+            document.getElementById('alertSkinLabel').textContent = name;
+            document.getElementById('alertCurrentPrice').textContent = price > 0 ? `Current: $${price.toFixed(2)}` : '';
+            document.getElementById('alertThreshold').value = price > 0 ? (price * 0.9).toFixed(2) : '';
+            document.getElementById('alertError').classList.add('hidden');
+            document.getElementById('alertForm').classList.remove('hidden');
+            document.getElementById('alertSuccess').classList.add('hidden');
+            document.getElementById('alertModal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('alertEmail').focus(), 50);
+        }
+        function closeAlert() { document.getElementById('alertModal').classList.add('hidden'); }
+        async function submitAlert() {
+            const email = document.getElementById('alertEmail').value.trim();
+            const threshold = parseFloat(document.getElementById('alertThreshold').value);
+            const errEl = document.getElementById('alertError');
+            if (!email.includes('@')) { errEl.textContent = 'Valid email required.'; errEl.classList.remove('hidden'); return; }
+            if (!threshold || threshold <= 0) { errEl.textContent = 'Valid price required.'; errEl.classList.remove('hidden'); return; }
+            errEl.classList.add('hidden');
+            const res = await fetch('/alerts/create', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, threshold, market_hash_name: alertMhn, skin_name: alertSkinName }) });
+            const data = await res.json();
+            if (data.success) { document.getElementById('alertForm').classList.add('hidden'); document.getElementById('alertSuccess').classList.remove('hidden'); }
+            else { errEl.textContent = data.error || 'Something went wrong.'; errEl.classList.remove('hidden'); }
+        }
+
+        // ── Wishlist ──────────────────────────────────────────────────────────
+        let wishlistMhn = '', wishlistSkinName = '', wishlistCurrentPrice = 0;
+        function openWishlist(mhn, name, price) {
+            wishlistMhn = mhn; wishlistSkinName = name; wishlistCurrentPrice = price;
+            document.getElementById('wishlistSkinLabel').textContent = name;
+            document.getElementById('wishlistCurrentPrice').textContent = price > 0 ? `Current: $${price.toFixed(2)}` : '';
+            document.getElementById('wishlistTarget').value = price > 0 ? (price * 0.85).toFixed(2) : '';
+            document.getElementById('wishlistError').classList.add('hidden');
+            document.getElementById('wishlistForm').classList.remove('hidden');
+            document.getElementById('wishlistSuccess').classList.add('hidden');
+            document.getElementById('wishlistModal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('wishlistEmail').focus(), 50);
+        }
+        function closeWishlist() { document.getElementById('wishlistModal').classList.add('hidden'); }
+        async function submitWishlist() {
+            const email = document.getElementById('wishlistEmail').value.trim();
+            const target = parseFloat(document.getElementById('wishlistTarget').value);
+            const errEl = document.getElementById('wishlistError');
+            if (!email.includes('@')) { errEl.textContent = 'Valid email required.'; errEl.classList.remove('hidden'); return; }
+            if (!target || target <= 0) { errEl.textContent = 'Valid price required.'; errEl.classList.remove('hidden'); return; }
+            errEl.classList.add('hidden');
+            const res = await fetch('/wishlist/add', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, target_price: target, mhn: wishlistMhn, skin_name: wishlistSkinName, current_price: wishlistCurrentPrice }) });
+            const data = await res.json();
+            if (data.success) { document.getElementById('wishlistForm').classList.add('hidden'); document.getElementById('wishlistSuccess').classList.remove('hidden'); }
+            else { errEl.textContent = data.error || 'Something went wrong.'; errEl.classList.remove('hidden'); }
+        }
+
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAlert(); closeShare(); closeWishlist(); } });
+    </script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Price Alerts — CS2 Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>body { font-family: 'Inter', sans-serif; background: #080c18; }</style>
+</head>
+<body class="min-h-screen text-gray-200">
+
+    <nav class="border-b border-white/5 px-6 py-4">
+        <div class="max-w-4xl mx-auto flex items-center justify-between">
+            <a href="/" class="flex items-center gap-1.5">
+                <span class="text-orange-500 font-black text-xl">CS2</span>
+                <span class="text-white font-bold text-xl">Tracker</span>
+            </a>
+            <a href="/" class="text-sm text-gray-500 hover:text-orange-400 transition-colors">← Track inventory</a>
+        </div>
+    </nav>
+
+    <main class="max-w-4xl mx-auto px-6 py-12">
+        <h1 class="text-3xl font-black text-white mb-2">My Price Alerts</h1>
+        <p class="text-gray-500 mb-8">Enter your email to see alerts you've set.</p>
+
+        <!-- Email lookup -->
+        <form method="GET" action="/my-alerts" class="flex gap-3 mb-10 max-w-lg">
+            <input type="email" name="email" value="{{ email }}" placeholder="your@email.com" required
+                   class="flex-1 bg-[#111827] border border-white/10 rounded-xl px-4 py-2.5 text-gray-100 text-sm focus:outline-none focus:border-orange-500 transition-colors placeholder-gray-700">
+            <button type="submit"
+                    class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition-colors">
+                Look Up
+            </button>
+        </form>
+
+        {% if email %}
+            {% if alerts %}
+            <div class="space-y-3">
+                {% for alert in alerts %}
+                <div class="bg-[#111827] border border-white/5 rounded-2xl p-5 flex items-center justify-between gap-4"
+                     id="alert-{{ alert.id }}">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-white font-semibold truncate">{{ alert.skin_name }}</p>
+                        <p class="text-gray-500 text-sm mt-0.5">
+                            Alert at
+                            <span class="text-orange-400 font-semibold">${{ "%.2f"|format(alert.threshold_price) }}</span>
+                            {% if alert.current_price %}
+                            · Current:
+                            <span class="{% if alert.current_price <= alert.threshold_price %}text-emerald-400{% else %}text-gray-400{% endif %} font-semibold">
+                                ${{ "%.2f"|format(alert.current_price) }}
+                            </span>
+                            {% endif %}
+                        </p>
+                        <p class="text-gray-700 text-xs mt-1">
+                            Created {{ alert.created_at[:10] }}
+                            {% if alert.last_checked %}· Last checked {{ alert.last_checked[:10] }}{% endif %}
+                        </p>
+                    </div>
+
+                    <div class="flex items-center gap-3 shrink-0">
+                        {% if alert.triggered %}
+                        <span class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium px-3 py-1.5 rounded-full">
+                            Triggered ✓
+                        </span>
+                        {% else %}
+                        <span class="bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-medium px-3 py-1.5 rounded-full">
+                            Active
+                        </span>
+                        {% endif %}
+                        <button onclick="deleteAlert({{ alert.id }})"
+                                class="text-gray-600 hover:text-red-400 transition-colors text-sm p-1">
+                            ✕
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-20 text-gray-600">
+                <p class="text-4xl mb-4">🔔</p>
+                <p class="text-lg font-semibold text-gray-500">No alerts found for {{ email }}</p>
+                <p class="text-sm mt-2">Track an inventory and hover a skin card to set a price alert.</p>
+                <a href="/" class="mt-6 inline-block text-orange-400 hover:underline text-sm">Track inventory →</a>
+            </div>
+            {% endif %}
+        {% endif %}
+    </main>
+
+    <script>
+        async function deleteAlert(id) {
+            if (!confirm('Delete this alert?')) return;
+            const res = await fetch(`/alerts/delete/${id}`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById(`alert-${id}`).remove();
+            }
+        }
+    </script>
+</body>
+</html>
