@@ -148,13 +148,42 @@
         </p>
     </div>
 
+    <!-- Filter Bar -->
+    <div class="max-w-7xl mx-auto px-6 py-3 flex flex-wrap gap-2 items-center border-b border-white/5">
+        <div class="relative">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-600 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <input type="text" id="filterSearch" placeholder="Search skins…"
+                   class="bg-[#0a0e1a] border border-white/10 rounded-xl pl-9 pr-4 py-1.5 text-gray-200 text-sm w-52 focus:outline-none focus:border-white/20 placeholder-gray-700"
+                   oninput="filterCards()">
+        </div>
+        <div class="flex gap-1">
+            <button onclick="setWear('')" data-wear="" class="filter-wear-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/10 bg-white/5 text-gray-300">All</button>
+            <button onclick="setWear('Factory New')" data-wear="Factory New" class="filter-wear-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400">FN</button>
+            <button onclick="setWear('Minimal Wear')" data-wear="Minimal Wear" class="filter-wear-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400">MW</button>
+            <button onclick="setWear('Field-Tested')" data-wear="Field-Tested" class="filter-wear-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400">FT</button>
+            <button onclick="setWear('Well-Worn')" data-wear="Well-Worn" class="filter-wear-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400">WW</button>
+            <button onclick="setWear('Battle-Scarred')" data-wear="Battle-Scarred" class="filter-wear-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400">BS</button>
+        </div>
+        <div class="flex gap-1.5">
+            <button id="filterSTBtn" onclick="toggleFilter('st')"
+                    class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400">ST™</button>
+            <button id="filterSpecialBtn" onclick="toggleFilter('special')"
+                    class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400">★ Knives &amp; Gloves</button>
+        </div>
+        <p id="filterCount" class="text-gray-700 text-xs ml-auto"></p>
+    </div>
+
     <!-- Grid -->
     <div class="max-w-7xl mx-auto px-6 py-8">
         {% if items %}
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
             {% for item in items %}
             <div class="skin-card rounded-xl overflow-hidden border border-white/5 relative"
-                 style="border-top: 3px solid {{ item.rarity_color }};">
+                 style="border-top: 3px solid {{ item.rarity_color }};"
+                 data-name="{{ item.name | lower }}"
+                 data-wear="{{ item.wear }}"
+                 data-stattrak="{{ 'true' if item.is_stattrak else 'false' }}"
+                 data-special="{{ 'true' if item.is_special else 'false' }}">
 
                 <!-- StatTrak / Souvenir badge -->
                 {% if item.is_stattrak %}
@@ -222,7 +251,7 @@
 
                     <!-- Float button -->
                     {% if item.wear %}
-                    <button onclick="openFloat({{ item.market_hash_name|tojson }}, {{ item.name|tojson }}, {{ item.wear|tojson }})"
+                    <button onclick="openFloat({{ item.market_hash_name|tojson }}, {{ item.name|tojson }}, {{ item.wear|tojson }}, {{ item.inspect_link|tojson }})"
                             class="w-full mt-2 text-gray-700 hover:text-cyan-400 text-xs transition-colors flex items-center justify-center gap-1">
                         <span class="font-mono font-bold text-[10px]">ƒ</span>
                         <span>float info</span>
@@ -274,8 +303,8 @@
             <!-- Wear tier bar -->
             <div class="mb-4">
                 <div class="relative h-4 rounded-full overflow-hidden mb-2" style="background:linear-gradient(to right,#38bdf8 0%,#34d399 7%,#a3e635 15%,#facc15 38%,#fb923c 45%,#ef4444 100%)">
-                    <!-- Highlight the current wear tier zone -->
                     <div id="floatHighlight" class="absolute top-0 h-full border-2 border-white/60 rounded" style="left:0;width:0;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.3)"></div>
+                    <div id="floatDot" class="hidden absolute top-0 h-full w-0.5 bg-white" style="left:0;transform:translateX(-50%);box-shadow:0 0 6px rgba(255,255,255,0.9)"></div>
                 </div>
                 <div class="flex text-[9px] text-gray-600 font-mono" style="justify-content:space-between">
                     <span class="text-center" style="width:7%">FN<br>0.00</span>
@@ -293,9 +322,32 @@
                 <p id="floatRangeLabel" class="text-gray-600 text-xs font-mono"></p>
             </div>
 
-            <!-- Info note -->
-            <div class="bg-white/3 border border-white/5 rounded-xl p-4 mb-5">
-                <p class="text-gray-400 text-sm leading-relaxed">CS2 stores float values on Valve's game servers — exact float requires connecting to the game coordinator. Use CSFloat to get the precise value for your specific item.</p>
+            <!-- Float fetch loading -->
+            <div id="floatFetchLoading" class="hidden mb-4 flex items-center justify-center gap-2 text-gray-600 py-1">
+                <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                <span class="text-xs">Fetching exact float...</span>
+            </div>
+
+            <!-- Real float data -->
+            <div id="floatRealData" class="hidden mb-4">
+                <div id="floatPhaseBadge" class="hidden text-center mb-3">
+                    <span id="floatPhaseText" class="inline-block px-4 py-1.5 rounded-full font-black text-sm border"></span>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="bg-[#0a0e1a] rounded-xl p-3 text-center">
+                        <p class="text-gray-600 text-[10px] uppercase tracking-widest mb-1">Exact Float</p>
+                        <p id="floatExactValue" class="text-sm font-black text-white font-mono tracking-tight"></p>
+                    </div>
+                    <div class="bg-[#0a0e1a] rounded-xl p-3 text-center">
+                        <p class="text-gray-600 text-[10px] uppercase tracking-widest mb-1">Pattern</p>
+                        <p id="floatSeedValue" class="text-sm font-black text-white font-mono"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fetch error / fallback note -->
+            <div id="floatInfoNote" class="bg-white/3 border border-white/5 rounded-xl p-4 mb-5">
+                <p id="floatInfoText" class="text-gray-400 text-sm leading-relaxed">CS2 stores float values on Valve's game servers — exact float requires connecting to the game coordinator. Use CSFloat to get the precise value for your specific item.</p>
             </div>
 
             <!-- Stickers (if any were parsed from Steam API) -->
@@ -480,9 +532,15 @@
             'Battle-Scarred': { min: 0.45, max: 1.00, color: '#ef4444', left: '45%',  width: '55%' },
         };
 
-        function openFloat(mhn, skinName, wear) {
+        function openFloat(mhn, skinName, wear, inspectLink) {
             document.getElementById('floatSkinLabel').textContent = skinName;
             document.getElementById('floatStickersSection').classList.add('hidden');
+            document.getElementById('floatFetchLoading').classList.add('hidden');
+            document.getElementById('floatRealData').classList.add('hidden');
+            document.getElementById('floatPhaseBadge').classList.add('hidden');
+            document.getElementById('floatDot').classList.add('hidden');
+            document.getElementById('floatInfoNote').classList.remove('hidden');
+            document.getElementById('floatInfoText').textContent = 'CS2 stores float values on Valve\'s game servers — exact float requires connecting to the game coordinator. Use CSFloat to get the precise value for your specific item.';
 
             const tier = WEAR_TIERS[wear];
             const wearLabel = document.getElementById('floatWearLabel');
@@ -516,9 +574,55 @@
                 document.getElementById('floatStickersSection').classList.remove('hidden');
             }
 
-            // CSFloat link — searches by market hash name
-            const csfloatUrl = 'https://csfloat.com/db?appid=730&market_hash_name=' + encodeURIComponent(mhn);
-            document.getElementById('floatCSFloatBtn').href = csfloatUrl;
+            // CSFloat link — searches by market hash name by default
+            document.getElementById('floatCSFloatBtn').href = 'https://csfloat.com/db?appid=730&market_hash_name=' + encodeURIComponent(mhn);
+
+            // Fetch real float data if inspect link is available
+            if (inspectLink) {
+                document.getElementById('floatFetchLoading').classList.remove('hidden');
+                document.getElementById('floatInfoNote').classList.add('hidden');
+                fetch('/api/float?url=' + encodeURIComponent(inspectLink))
+                    .then(r => r.json())
+                    .then(data => {
+                        document.getElementById('floatFetchLoading').classList.add('hidden');
+                        if (data.error) {
+                            document.getElementById('floatInfoNote').classList.remove('hidden');
+                            document.getElementById('floatInfoText').textContent = data.error;
+                            return;
+                        }
+                        // Exact float + pattern seed
+                        document.getElementById('floatExactValue').textContent = data.float != null ? data.float.toFixed(7) : '—';
+                        document.getElementById('floatSeedValue').textContent = data.seed != null ? String(data.seed) : '—';
+                        document.getElementById('floatRealData').classList.remove('hidden');
+                        // Precise dot on bar + update label
+                        if (data.float != null) {
+                            rangeLabel.textContent = `Float: ${data.float.toFixed(7)}`;
+                            const dot = document.getElementById('floatDot');
+                            dot.style.left = (data.float * 100).toFixed(3) + '%';
+                            dot.classList.remove('hidden');
+                        }
+                        // Doppler phase badge
+                        if (data.phase) {
+                            const phaseEl = document.getElementById('floatPhaseText');
+                            phaseEl.textContent = data.phase;
+                            const phaseColors = {
+                                'Ruby':        'text-red-400 border-red-500/40 bg-red-500/10',
+                                'Sapphire':    'text-blue-400 border-blue-500/40 bg-blue-500/10',
+                                'Black Pearl': 'text-purple-300 border-purple-500/40 bg-purple-500/10',
+                                'Emerald':     'text-emerald-400 border-emerald-500/40 bg-emerald-500/10',
+                            };
+                            const cls = phaseColors[data.phase] || 'text-cyan-400 border-cyan-500/40 bg-cyan-500/10';
+                            phaseEl.className = 'inline-block px-4 py-1.5 rounded-full font-black text-sm border ' + cls;
+                            document.getElementById('floatPhaseBadge').classList.remove('hidden');
+                        }
+                        // Update CSFloat link to direct item inspect
+                        document.getElementById('floatCSFloatBtn').href = 'https://csfloat.com/?inspectLink=' + encodeURIComponent(inspectLink);
+                    })
+                    .catch(() => {
+                        document.getElementById('floatFetchLoading').classList.add('hidden');
+                        document.getElementById('floatInfoNote').classList.remove('hidden');
+                    });
+            }
 
             document.getElementById('floatModal').classList.remove('hidden');
         }
@@ -675,6 +779,56 @@
                 errEl.textContent = data.error || 'Something went wrong.';
                 errEl.classList.remove('hidden');
             }
+        }
+
+        // ── Inventory Filter ──────────────────────────────────────────────────
+        let activeWear = '';
+        let activeFilterST = false;
+        let activeFilterSpecial = false;
+
+        function setWear(wear) {
+            activeWear = wear;
+            document.querySelectorAll('.filter-wear-btn').forEach(btn => {
+                const on = btn.dataset.wear === wear;
+                btn.className = 'filter-wear-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ' +
+                    (on ? 'border-white/10 bg-white/5 text-gray-300' : 'border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400');
+            });
+            filterCards();
+        }
+
+        function toggleFilter(type) {
+            if (type === 'st') {
+                activeFilterST = !activeFilterST;
+                const btn = document.getElementById('filterSTBtn');
+                btn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ' +
+                    (activeFilterST ? 'border-orange-500/40 text-orange-400 bg-orange-500/5' : 'border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400');
+            } else {
+                activeFilterSpecial = !activeFilterSpecial;
+                const btn = document.getElementById('filterSpecialBtn');
+                btn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ' +
+                    (activeFilterSpecial ? 'border-purple-500/40 text-purple-400 bg-purple-500/5' : 'border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400');
+            }
+            filterCards();
+        }
+
+        function filterCards() {
+            const search = (document.getElementById('filterSearch').value || '').toLowerCase();
+            const cards = document.querySelectorAll('.skin-card');
+            let visible = 0;
+            cards.forEach(card => {
+                const name = (card.dataset.name || '').toLowerCase();
+                const wear = card.dataset.wear || '';
+                const st = card.dataset.stattrak === 'true';
+                const special = card.dataset.special === 'true';
+                const show = (!search || name.includes(search)) &&
+                             (!activeWear || wear === activeWear) &&
+                             (!activeFilterST || st) &&
+                             (!activeFilterSpecial || special);
+                card.style.display = show ? '' : 'none';
+                if (show) visible++;
+            });
+            const countEl = document.getElementById('filterCount');
+            if (countEl) countEl.textContent = visible < cards.length ? `${visible} of ${cards.length} shown` : '';
         }
 
         document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAlert(); closeShare(); closeWishlist(); closeBuyPrice(); closeFloat(); } });
