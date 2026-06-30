@@ -16,6 +16,18 @@
         .card-actions { opacity: 0; transition: opacity 0.15s; }
         .item-name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         .value-badge { background: rgba(52,211,153,0.08); border: 1px solid rgba(52,211,153,0.15); }
+        .filter-btn-active { border-color: rgba(249,115,22,0.5) !important; color: #f97316 !important; background: rgba(249,115,22,0.08) !important; }
+        .filter-btn-purple-active { border-color: rgba(168,85,247,0.5) !important; color: #a855f7 !important; background: rgba(168,85,247,0.08) !important; }
+        .fav-btn.starred { color: #fbbf24 !important; }
+        #listView { display: none; }
+        .list-row { background: linear-gradient(90deg, #111827 0%, #0f1a2e 100%); border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.1s; }
+        .list-row:hover { background: linear-gradient(90deg, #1a2438 0%, #162236 100%); }
+        .rarity-bar { width: 4px; border-radius: 2px; flex-shrink: 0; }
+        .breakdown-pill { transition: border-color 0.15s, background 0.15s; }
+        .breakdown-pill:hover { border-color: rgba(249,115,22,0.4); background: rgba(249,115,22,0.06); }
+        .sort-select { background: #0a0e1a; border: 1px solid rgba(255,255,255,0.1); color: #9ca3af; border-radius: 0.5rem; padding: 0.375rem 0.75rem; font-size: 0.75rem; outline: none; cursor: pointer; }
+        .sort-select:focus { border-color: rgba(255,255,255,0.2); }
+        .wear-compare-table td, .wear-compare-table th { padding: 6px 10px; font-size: 11px; }
     </style>
 </head>
 <body class="min-h-screen text-gray-200">
@@ -141,21 +153,43 @@
     </div>
     {% endif %}
 
-    <!-- Subheader -->
-    <div class="max-w-7xl mx-auto px-6 py-4 mt-4 border-b border-white/5 flex items-center justify-between">
-        <p class="text-gray-600 text-sm">
-            <span class="text-white font-semibold">{{ count }}</span> items · sorted by value · hover a card to set alert or add to wishlist
-        </p>
+    <!-- Inventory Breakdown -->
+    <div class="max-w-7xl mx-auto px-6 pt-5">
+        <div class="bg-[#111827] border border-white/5 rounded-2xl overflow-hidden">
+            <button onclick="toggleBreakdown()" class="w-full px-5 py-3.5 flex items-center justify-between hover:bg-white/2 transition-colors">
+                <span class="text-white text-sm font-semibold">Inventory Breakdown</span>
+                <span id="breakdownChevron" class="text-gray-600 text-sm transition-transform">▾</span>
+            </button>
+            <div id="breakdownBody" class="px-5 pb-5 border-t border-white/5">
+                <!-- Weapon types -->
+                <div class="mb-4 pt-4">
+                    <p class="text-gray-600 text-xs uppercase tracking-widest mb-2.5">By Type</p>
+                    <div id="breakdownTypes" class="flex flex-wrap gap-2"></div>
+                </div>
+                <!-- Wear distribution -->
+                <div class="mb-4">
+                    <p class="text-gray-600 text-xs uppercase tracking-widest mb-2.5">Wear Distribution</p>
+                    <div id="breakdownWear" class="flex flex-wrap gap-2"></div>
+                </div>
+                <!-- Quality -->
+                <div>
+                    <p class="text-gray-600 text-xs uppercase tracking-widest mb-2.5">Quality</p>
+                    <div id="breakdownQuality" class="flex gap-4"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Filter Bar -->
-    <div class="max-w-7xl mx-auto px-6 py-3 flex flex-wrap gap-2 items-center border-b border-white/5">
+    <!-- Filter Bar Row 1 -->
+    <div class="max-w-7xl mx-auto px-6 pt-4 pb-0 flex flex-wrap gap-2 items-center border-b border-white/5 pb-3">
+        <!-- Search -->
         <div class="relative">
             <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-600 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
             <input type="text" id="filterSearch" placeholder="Search skins…"
                    class="bg-[#0a0e1a] border border-white/10 rounded-xl pl-9 pr-4 py-1.5 text-gray-200 text-sm w-52 focus:outline-none focus:border-white/20 placeholder-gray-700"
                    oninput="filterCards()">
         </div>
+        <!-- Wear buttons -->
         <div class="flex gap-1">
             <button onclick="setWear('')" data-wear="" class="filter-wear-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/10 bg-white/5 text-gray-300">All</button>
             <button onclick="setWear('Factory New')" data-wear="Factory New" class="filter-wear-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400">FN</button>
@@ -164,26 +198,60 @@
             <button onclick="setWear('Well-Worn')" data-wear="Well-Worn" class="filter-wear-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400">WW</button>
             <button onclick="setWear('Battle-Scarred')" data-wear="Battle-Scarred" class="filter-wear-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400">BS</button>
         </div>
+        <!-- Toggle filters -->
         <div class="flex gap-1.5">
             <button id="filterSTBtn" onclick="toggleFilter('st')"
                     class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400">ST™</button>
+            <button id="filterSVBtn" onclick="toggleFilter('sv')"
+                    class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400">SV</button>
             <button id="filterSpecialBtn" onclick="toggleFilter('special')"
                     class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400">★ Knives &amp; Gloves</button>
+            <button id="filterFavBtn" onclick="toggleFilter('fav')"
+                    class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400">☆ Favorites</button>
         </div>
-        <p id="filterCount" class="text-gray-700 text-xs ml-auto"></p>
+        <!-- Sort -->
+        <select id="sortSelect" class="sort-select" onchange="applySortAndFilter()">
+            <option value="value-desc">Value ↓</option>
+            <option value="value-asc">Value ↑</option>
+            <option value="name-asc">Name A-Z</option>
+            <option value="wear-asc">Wear (FN first)</option>
+            <option value="qty-desc">Qty ↓</option>
+            <option value="pnl-desc">P&amp;L ↓</option>
+        </select>
+        <!-- Grid / List toggle -->
+        <div class="flex gap-1 ml-auto">
+            <button id="viewGrid" onclick="setView('grid')" title="Grid view"
+                    class="px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/10 bg-white/5 text-gray-300">⊞</button>
+            <button id="viewList" onclick="setView('list')" title="List view"
+                    class="px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400">≡</button>
+        </div>
+        <p id="filterCount" class="text-gray-700 text-xs"></p>
     </div>
 
-    <!-- Grid -->
-    <div class="max-w-7xl mx-auto px-6 py-8">
+    <!-- Filter Bar Row 2 — Weapon types -->
+    <div class="max-w-7xl mx-auto px-6 py-2 border-b border-white/5">
+        <div id="weaponTypeRow" class="flex flex-wrap gap-1.5 items-center">
+            <button onclick="setWeaponType('')" data-wtype="" class="filter-wtype-btn px-3 py-1 rounded-lg text-xs font-semibold transition-all border border-white/10 bg-white/5 text-gray-300">All</button>
+        </div>
+    </div>
+
+    <!-- Grid View -->
+    <div id="gridView" class="max-w-7xl mx-auto px-6 py-8">
         {% if items %}
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+        <div id="skinGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
             {% for item in items %}
             <div class="skin-card rounded-xl overflow-hidden border border-white/5 relative"
                  style="border-top: 3px solid {{ item.rarity_color }};"
                  data-name="{{ item.name | lower }}"
+                 data-mhn="{{ item.market_hash_name }}"
                  data-wear="{{ item.wear }}"
                  data-stattrak="{{ 'true' if item.is_stattrak else 'false' }}"
-                 data-special="{{ 'true' if item.is_special else 'false' }}">
+                 data-souvenir="{{ 'true' if item.is_souvenir else 'false' }}"
+                 data-special="{{ 'true' if item.is_special else 'false' }}"
+                 data-weapon-type="{{ item.weapon_type | lower }}"
+                 data-total="{{ item.total }}"
+                 data-price="{{ item.price }}"
+                 data-qty="{{ item.amount }}">
 
                 <!-- StatTrak / Souvenir badge -->
                 {% if item.is_stattrak %}
@@ -194,16 +262,31 @@
 
                 <!-- Action buttons (hover) -->
                 <div class="card-actions absolute top-2 right-1 flex gap-1 z-10">
-                    <button title="Track P&L"
+                    <!-- Favorite -->
+                    <button title="Favorite" data-fav-mhn="{{ item.market_hash_name }}"
+                        class="fav-btn bg-black/70 hover:bg-yellow-500/20 text-gray-500 rounded-lg p-1.5 transition-colors"
+                        onclick="toggleFav({{ item.market_hash_name|tojson }}, this)">
+                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                    </button>
+                    <!-- Track P&L -->
+                    <button title="Track P&amp;L"
                         class="bg-black/70 hover:bg-emerald-500 text-white rounded-lg p-1.5 transition-colors"
                         onclick="openBuyPrice({{ item.market_hash_name|tojson }}, {{ item.name|tojson }}, {{ item.price }})">
                         <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     </button>
+                    <!-- Steam Market -->
+                    <a title="Steam Market" target="_blank"
+                       href="https://steamcommunity.com/market/listings/730/{{ item.market_hash_name | urlencode }}"
+                       class="bg-black/70 hover:bg-blue-500 text-white rounded-lg p-1.5 transition-colors flex items-center">
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                    </a>
+                    <!-- Price alert -->
                     <button title="Price alert"
                         class="bg-black/70 hover:bg-orange-500 text-white rounded-lg p-1.5 transition-colors"
                         onclick="openAlert({{ item.market_hash_name|tojson }}, {{ item.name|tojson }}, {{ item.price }})">
                         <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
                     </button>
+                    <!-- Wishlist -->
                     <button title="Wishlist"
                         class="bg-black/70 hover:bg-pink-500 text-white rounded-lg p-1.5 transition-colors"
                         onclick="openWishlist({{ item.market_hash_name|tojson }}, {{ item.name|tojson }}, {{ item.price }})">
@@ -221,7 +304,8 @@
                 <!-- Info -->
                 <div class="p-3">
                     <p class="item-name text-white text-xs font-semibold leading-snug mb-1">{{ item.name }}</p>
-                    {% if item.wear %}<p class="text-gray-600 text-xs mb-1 truncate">{{ item.wear }}</p>{% endif %}
+                    {% if item.wear %}<p class="text-gray-600 text-xs mb-0.5 truncate">{{ item.wear }}</p>{% endif %}
+                    {% if item.rarity_name %}<p class="text-[10px] mb-1 truncate" style="color: {{ item.rarity_color }}">{{ item.rarity_name }}</p>{% endif %}
 
                     {% if item.total > 0 %}
                     <div class="value-badge rounded-lg px-2 py-1 text-center">
@@ -265,6 +349,14 @@
         <p class="text-center text-gray-700 text-xs mt-12">Prices from Steam Community Market · Approximate values only</p>
     </div>
 
+    <!-- List View -->
+    <div id="listView" class="max-w-7xl mx-auto px-6 py-4">
+        <div id="listContainer" class="rounded-xl overflow-hidden border border-white/5"></div>
+        <p class="text-center text-gray-700 text-xs mt-8">Prices from Steam Community Market · Approximate values only</p>
+    </div>
+
+    <!-- ── Modals ──────────────────────────────────────────────────────────── -->
+
     <!-- Share Modal -->
     <div id="shareModal" class="fixed inset-0 bg-black/75 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeShare()">
         <div class="bg-[#111827] border border-[#1e2d3d] rounded-2xl p-6 w-full max-w-sm shadow-2xl">
@@ -298,7 +390,7 @@
                 <h3 class="text-white font-bold text-lg">Float Info</h3>
                 <button onclick="closeFloat()" class="text-gray-600 hover:text-white transition-colors text-xl leading-none">×</button>
             </div>
-            <p id="floatSkinLabel" class="text-gray-500 text-sm mb-5 truncate"></p>
+            <p id="floatSkinLabel" class="text-gray-500 text-sm mb-4 truncate"></p>
 
             <!-- Wear tier bar -->
             <div class="mb-4">
@@ -317,7 +409,7 @@
             </div>
 
             <!-- Wear tier label + range -->
-            <div class="bg-[#0a0e1a] rounded-xl p-4 mb-5 text-center">
+            <div class="bg-[#0a0e1a] rounded-xl p-4 mb-4 text-center">
                 <p id="floatWearLabel" class="text-2xl font-black mb-1"></p>
                 <p id="floatRangeLabel" class="text-gray-600 text-xs font-mono"></p>
             </div>
@@ -345,22 +437,53 @@
                 </div>
             </div>
 
+            <!-- Copy inspect link + Wear compare buttons -->
+            <div id="floatInspectActions" class="hidden mb-4 flex gap-2">
+                <button id="copyInspectBtn" onclick="copyInspectLink()"
+                    class="flex-1 text-xs border border-white/10 text-gray-400 rounded-xl py-2 hover:border-white/20 transition-colors">
+                    Copy Inspect Link
+                </button>
+                <button id="wearCompareBtn" onclick="loadWearPrices()"
+                    class="flex-1 text-xs border border-cyan-500/30 text-cyan-400 rounded-xl py-2 hover:bg-cyan-500/5 transition-colors">
+                    Compare Wear Prices →
+                </button>
+            </div>
+
+            <!-- Wear price compare table -->
+            <div id="wearCompareSection" class="hidden mb-4">
+                <div id="wearCompareLoading" class="text-center py-3 text-gray-600 text-xs">Loading wear prices...</div>
+                <table id="wearCompareTable" class="wear-compare-table w-full hidden">
+                    <thead>
+                        <tr class="text-gray-600 border-b border-white/5">
+                            <th class="text-left font-semibold">Wear</th>
+                            <th class="text-right font-semibold">Price</th>
+                            <th class="text-right font-semibold">vs current</th>
+                        </tr>
+                    </thead>
+                    <tbody id="wearCompareBody"></tbody>
+                </table>
+            </div>
+
             <!-- Fetch error / fallback note -->
-            <div id="floatInfoNote" class="bg-white/3 border border-white/5 rounded-xl p-4 mb-5">
+            <div id="floatInfoNote" class="bg-white/3 border border-white/5 rounded-xl p-4 mb-4">
                 <p id="floatInfoText" class="text-gray-400 text-sm leading-relaxed">CS2 stores float values on Valve's game servers — exact float requires connecting to the game coordinator. Use CSFloat to get the precise value for your specific item.</p>
             </div>
 
-            <!-- Stickers (if any were parsed from Steam API) -->
-            <div id="floatStickersSection" class="hidden mb-5">
+            <!-- Stickers -->
+            <div id="floatStickersSection" class="hidden mb-4">
                 <p class="text-gray-600 text-xs uppercase tracking-widest mb-3">Stickers on this item</p>
                 <div id="floatStickersList" class="space-y-2"></div>
             </div>
 
-            <div class="flex gap-3">
+            <div class="flex gap-2">
                 <button onclick="closeFloat()" class="flex-1 border border-white/10 text-gray-400 rounded-xl py-2.5 text-sm hover:border-white/20 transition-colors">Close</button>
+                <a id="floatMarketBtn" href="#" target="_blank"
+                   class="flex-1 text-center bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 font-semibold rounded-xl py-2.5 text-sm transition-colors">
+                   Steam Market ↗
+                </a>
                 <a id="floatCSFloatBtn" href="#" target="_blank"
                    class="flex-1 text-center bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 font-semibold rounded-xl py-2.5 text-sm transition-colors">
-                   Check on CSFloat ↗
+                   CSFloat ↗
                 </a>
             </div>
         </div>
@@ -497,6 +620,231 @@
             }
         }
 
+        // ── Inventory Breakdown ───────────────────────────────────────────────
+        let breakdownOpen = true;
+        function toggleBreakdown() {
+            breakdownOpen = !breakdownOpen;
+            document.getElementById('breakdownBody').style.display = breakdownOpen ? '' : 'none';
+            document.getElementById('breakdownChevron').style.transform = breakdownOpen ? '' : 'rotate(-90deg)';
+        }
+
+        function buildBreakdown() {
+            const typeMap = {}, wearMap = {};
+            let stCount = 0, svCount = 0;
+            ITEMS.forEach(item => {
+                const t = item.weapon_type || 'Other';
+                if (!typeMap[t]) typeMap[t] = { count: 0, value: 0 };
+                typeMap[t].count += item.amount;
+                typeMap[t].value += item.total;
+                if (item.wear) {
+                    wearMap[item.wear] = (wearMap[item.wear] || 0) + item.amount;
+                }
+                if (item.is_stattrak) stCount += item.amount;
+                if (item.is_souvenir) svCount += item.amount;
+            });
+
+            // Types
+            const typeDiv = document.getElementById('breakdownTypes');
+            const typeSorted = Object.entries(typeMap).sort((a,b) => b[1].value - a[1].value);
+            typeDiv.innerHTML = typeSorted.map(([t, d]) =>
+                `<button class="breakdown-pill border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 cursor-pointer"
+                    onclick="setWeaponType(${JSON.stringify(t)})">
+                    <span class="font-semibold text-white">${escHtml(t)}</span>
+                    <span class="text-gray-600 ml-1">×${d.count}</span>
+                    <span class="text-emerald-400 ml-1">$${d.value.toFixed(0)}</span>
+                </button>`
+            ).join('');
+
+            // Wear distribution
+            const wearDiv = document.getElementById('breakdownWear');
+            const wearOrder = ['Factory New','Minimal Wear','Field-Tested','Well-Worn','Battle-Scarred'];
+            const wearAbbr = { 'Factory New':'FN','Minimal Wear':'MW','Field-Tested':'FT','Well-Worn':'WW','Battle-Scarred':'BS' };
+            const wearColor = { 'Factory New':'#38bdf8','Minimal Wear':'#34d399','Field-Tested':'#a3e635','Well-Worn':'#fb923c','Battle-Scarred':'#ef4444' };
+            wearDiv.innerHTML = wearOrder.filter(w => wearMap[w]).map(w =>
+                `<span class="border border-white/10 rounded-lg px-2.5 py-1 text-xs font-semibold" style="color:${wearColor[w]}">
+                    ${wearAbbr[w]} <span class="text-gray-500 font-normal">·${wearMap[w]}</span>
+                </span>`
+            ).join('');
+            if (!wearDiv.innerHTML) wearDiv.innerHTML = '<span class="text-gray-700 text-xs">No exterior data</span>';
+
+            // Quality
+            const qualDiv = document.getElementById('breakdownQuality');
+            let qualHtml = '';
+            if (stCount) qualHtml += `<span class="text-orange-400 text-sm font-semibold">${stCount} StatTrak™</span>`;
+            if (svCount) qualHtml += `<span class="text-yellow-400 text-sm font-semibold">${svCount} Souvenir</span>`;
+            if (!stCount && !svCount) qualHtml = '<span class="text-gray-700 text-xs">None in this inventory</span>';
+            qualDiv.innerHTML = qualHtml;
+        }
+
+        // ── Weapon type filter row ────────────────────────────────────────────
+        function buildWeaponTypeRow() {
+            const types = new Set();
+            ITEMS.forEach(i => { if (i.weapon_type) types.add(i.weapon_type); });
+            const row = document.getElementById('weaponTypeRow');
+            [...types].sort().forEach(t => {
+                const btn = document.createElement('button');
+                btn.dataset.wtype = t.toLowerCase();
+                btn.className = 'filter-wtype-btn px-3 py-1 rounded-lg text-xs font-semibold transition-all border border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400';
+                btn.textContent = t;
+                btn.onclick = () => setWeaponType(t);
+                row.appendChild(btn);
+            });
+        }
+
+        // ── Favorites ─────────────────────────────────────────────────────────
+        const FAV_KEY = `cs2fav_${STEAM_ID}`;
+        let favorites = new Set(JSON.parse(localStorage.getItem(FAV_KEY) || '[]'));
+
+        function saveFavorites() {
+            localStorage.setItem(FAV_KEY, JSON.stringify([...favorites]));
+        }
+
+        function toggleFav(mhn, btn) {
+            if (favorites.has(mhn)) {
+                favorites.delete(mhn);
+                btn.classList.remove('starred');
+            } else {
+                favorites.add(mhn);
+                btn.classList.add('starred');
+            }
+            saveFavorites();
+            if (activeFilterFav) filterCards();
+        }
+
+        function applyFavoritesOnLoad() {
+            document.querySelectorAll('[data-fav-mhn]').forEach(btn => {
+                if (favorites.has(btn.dataset.favMhn)) btn.classList.add('starred');
+            });
+        }
+
+        // ── View toggle ───────────────────────────────────────────────────────
+        let currentView = 'grid';
+        function setView(v) {
+            currentView = v;
+            if (v === 'grid') {
+                document.getElementById('gridView').style.display = '';
+                document.getElementById('listView').style.display = 'none';
+                document.getElementById('viewGrid').className = 'px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/10 bg-white/5 text-gray-300';
+                document.getElementById('viewList').className = 'px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400';
+            } else {
+                document.getElementById('gridView').style.display = 'none';
+                document.getElementById('listView').style.display = '';
+                document.getElementById('viewGrid').className = 'px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400';
+                document.getElementById('viewList').className = 'px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/10 bg-white/5 text-gray-300';
+                renderListView();
+            }
+        }
+
+        // ── Sort ──────────────────────────────────────────────────────────────
+        const WEAR_ORDER = { 'Factory New':0,'Minimal Wear':1,'Field-Tested':2,'Well-Worn':3,'Battle-Scarred':4 };
+
+        function getSortedItems(items) {
+            const sort = document.getElementById('sortSelect').value;
+            const arr = [...items];
+            if (sort === 'value-desc') arr.sort((a,b) => b.total - a.total);
+            else if (sort === 'value-asc') arr.sort((a,b) => a.total - b.total);
+            else if (sort === 'name-asc') arr.sort((a,b) => a.name.localeCompare(b.name));
+            else if (sort === 'wear-asc') arr.sort((a,b) => (WEAR_ORDER[a.wear]??99) - (WEAR_ORDER[b.wear]??99));
+            else if (sort === 'qty-desc') arr.sort((a,b) => b.amount - a.amount);
+            else if (sort === 'pnl-desc') {
+                arr.sort((a,b) => {
+                    const pa = buyPrices[a.market_hash_name] != null ? (a.price - buyPrices[a.market_hash_name])*a.amount : -Infinity;
+                    const pb = buyPrices[b.market_hash_name] != null ? (b.price - buyPrices[b.market_hash_name])*b.amount : -Infinity;
+                    return pb - pa;
+                });
+            }
+            return arr;
+        }
+
+        function applySortAndFilter() {
+            if (currentView === 'grid') {
+                reorderGrid();
+                filterCards();
+            } else {
+                renderListView();
+            }
+        }
+
+        function reorderGrid() {
+            const grid = document.getElementById('skinGrid');
+            if (!grid) return;
+            const cards = [...grid.querySelectorAll('.skin-card')];
+            // map mhn -> card
+            const cardMap = {};
+            cards.forEach(c => { cardMap[c.dataset.mhn] = c; });
+            const sorted = getSortedItems(ITEMS);
+            sorted.forEach(item => {
+                const card = cardMap[item.market_hash_name];
+                if (card) grid.appendChild(card);
+            });
+        }
+
+        // ── List View ─────────────────────────────────────────────────────────
+        function escHtml(s) {
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        function itemMatchesFilters(item) {
+            const search = (document.getElementById('filterSearch').value || '').toLowerCase();
+            if (search && !item.name.toLowerCase().includes(search)) return false;
+            if (activeWear && item.wear !== activeWear) return false;
+            if (activeWeaponType && (item.weapon_type||'').toLowerCase() !== activeWeaponType.toLowerCase()) return false;
+            if (activeFilterST && !item.is_stattrak) return false;
+            if (activeFilterSV && !item.is_souvenir) return false;
+            if (activeFilterSpecial && !item.is_special) return false;
+            if (activeFilterFav && !favorites.has(item.market_hash_name)) return false;
+            return true;
+        }
+
+        function renderListView() {
+            const container = document.getElementById('listContainer');
+            const sorted = getSortedItems(ITEMS);
+            const filtered = sorted.filter(itemMatchesFilters);
+            if (!filtered.length) {
+                container.innerHTML = '<div class="py-12 text-center text-gray-600 text-sm">No items match your filters.</div>';
+                return;
+            }
+            container.innerHTML = filtered.map(item => {
+                const bp = buyPrices[item.market_hash_name];
+                const pnl = bp != null ? (item.price - bp) * item.amount : null;
+                const pnlHtml = pnl != null
+                    ? `<span class="list-pnl text-xs font-semibold ${pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}" data-mhn="${escHtml(item.market_hash_name)}">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</span>`
+                    : `<span class="list-pnl text-gray-700 text-xs" data-mhn="${escHtml(item.market_hash_name)}">—</span>`;
+                const inspectAttr = item.inspect_link ? `data-inspect="${escHtml(item.inspect_link)}"` : '';
+                return `
+                <div class="list-row flex items-center gap-3 px-4 py-3 ${itemMatchesFilters(item) ? '' : 'hidden'}"
+                     data-name="${escHtml(item.name.toLowerCase())}"
+                     data-mhn="${escHtml(item.market_hash_name)}"
+                     data-wear="${escHtml(item.wear)}"
+                     data-stattrak="${item.is_stattrak}"
+                     data-souvenir="${item.is_souvenir}"
+                     data-special="${item.is_special}"
+                     data-weapon-type="${escHtml((item.weapon_type||'').toLowerCase())}"
+                     ${inspectAttr}>
+                    <div class="rarity-bar self-stretch" style="background:${escHtml(item.rarity_color)};min-height:40px;"></div>
+                    ${item.icon ? `<img src="${escHtml(item.icon)}" class="w-10 h-8 object-contain shrink-0" loading="lazy" onerror="this.style.display='none'">` : '<div class="w-10"></div>'}
+                    <div class="flex-1 min-w-0">
+                        <p class="text-white text-sm font-semibold truncate">${escHtml(item.name)}</p>
+                        <p class="text-gray-600 text-xs truncate">${escHtml(item.wear)}${item.collection ? ' · '+escHtml(item.collection) : ''}${item.rarity_name ? ' · <span style="color:'+escHtml(item.rarity_color)+'">'+escHtml(item.rarity_name)+'</span>' : ''}</p>
+                    </div>
+                    ${item.amount > 1 ? `<span class="text-gray-600 text-xs shrink-0">×${item.amount}</span>` : ''}
+                    <span class="text-gray-400 text-xs shrink-0 w-16 text-right">$${item.price.toFixed(2)}</span>
+                    <span class="text-emerald-400 text-sm font-bold shrink-0 w-20 text-right">$${item.total.toFixed(2)}</span>
+                    <span class="shrink-0 w-20 text-right">${pnlHtml}</span>
+                    <div class="flex gap-1.5 shrink-0">
+                        <a href="https://steamcommunity.com/market/listings/730/${encodeURIComponent(item.market_hash_name)}" target="_blank"
+                           class="text-gray-600 hover:text-blue-400 text-xs transition-colors border border-white/5 rounded-lg px-2 py-1">Market</a>
+                        ${item.wear ? `<button class="text-gray-600 hover:text-cyan-400 text-xs transition-colors border border-white/5 rounded-lg px-2 py-1"
+                            onclick="openFloat(${JSON.stringify(item.market_hash_name)},${JSON.stringify(item.name)},${JSON.stringify(item.wear)},${JSON.stringify(item.inspect_link||'')})">Float</button>` : ''}
+                        <button class="text-gray-600 hover:text-orange-400 text-xs transition-colors border border-white/5 rounded-lg px-2 py-1"
+                            onclick="openAlert(${JSON.stringify(item.market_hash_name)},${JSON.stringify(item.name)},${item.price})">Alert</button>
+                        <button class="text-gray-600 hover:text-emerald-400 text-xs transition-colors border border-white/5 rounded-lg px-2 py-1"
+                            onclick="openBuyPrice(${JSON.stringify(item.market_hash_name)},${JSON.stringify(item.name)},${item.price})">P&amp;L</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
         // ── Share ─────────────────────────────────────────────────────────────
         async function shareInventory() {
             document.getElementById('shareModal').classList.remove('hidden');
@@ -532,7 +880,13 @@
             'Battle-Scarred': { min: 0.45, max: 1.00, color: '#ef4444', left: '45%',  width: '55%' },
         };
 
+        let currentFloatMhn = '', currentFloatWear = '', currentInspectLink = '';
+
         function openFloat(mhn, skinName, wear, inspectLink) {
+            currentFloatMhn = mhn;
+            currentFloatWear = wear;
+            currentInspectLink = inspectLink || '';
+
             document.getElementById('floatSkinLabel').textContent = skinName;
             document.getElementById('floatStickersSection').classList.add('hidden');
             document.getElementById('floatFetchLoading').classList.add('hidden');
@@ -541,6 +895,9 @@
             document.getElementById('floatDot').classList.add('hidden');
             document.getElementById('floatInfoNote').classList.remove('hidden');
             document.getElementById('floatInfoText').textContent = 'CS2 stores float values on Valve\'s game servers — exact float requires connecting to the game coordinator. Use CSFloat to get the precise value for your specific item.';
+            document.getElementById('wearCompareSection').classList.add('hidden');
+            document.getElementById('wearCompareLoading').classList.remove('hidden');
+            document.getElementById('wearCompareTable').classList.add('hidden');
 
             const tier = WEAR_TIERS[wear];
             const wearLabel = document.getElementById('floatWearLabel');
@@ -561,24 +918,26 @@
                 highlight.style.width = '0';
             }
 
-            // Stickers from item data
+            // Stickers
             const item = ITEMS.find(i => i.market_hash_name === mhn);
             if (item && item.stickers && item.stickers.length) {
                 const list = document.getElementById('floatStickersList');
                 list.innerHTML = item.stickers.map(s => `
                     <div class="flex items-center gap-3 bg-[#0a0e1a] rounded-xl px-3 py-2">
                         ${s.icon ? `<img src="${s.icon}" class="w-12 h-9 object-contain shrink-0" onerror="this.style.display='none'">` : ''}
-                        <span class="text-gray-300 text-sm">${s.name || 'Sticker'}</span>
+                        <span class="text-gray-300 text-sm">${escHtml(s.name || 'Sticker')}</span>
                     </div>
                 `).join('');
                 document.getElementById('floatStickersSection').classList.remove('hidden');
             }
 
-            // CSFloat link — searches by market hash name by default
+            // CSFloat + Market links
             document.getElementById('floatCSFloatBtn').href = 'https://csfloat.com/db?appid=730&market_hash_name=' + encodeURIComponent(mhn);
+            document.getElementById('floatMarketBtn').href = 'https://steamcommunity.com/market/listings/730/' + encodeURIComponent(mhn);
 
-            // Fetch real float data if inspect link is available
+            // Show inspect actions if we have an inspect link
             if (inspectLink) {
+                document.getElementById('floatInspectActions').classList.remove('hidden');
                 document.getElementById('floatFetchLoading').classList.remove('hidden');
                 document.getElementById('floatInfoNote').classList.add('hidden');
                 fetch('/api/float?url=' + encodeURIComponent(inspectLink))
@@ -590,45 +949,90 @@
                             document.getElementById('floatInfoText').textContent = data.error;
                             return;
                         }
-                        // Exact float + pattern seed
                         document.getElementById('floatExactValue').textContent = data.float != null ? data.float.toFixed(7) : '—';
                         document.getElementById('floatSeedValue').textContent = data.seed != null ? String(data.seed) : '—';
                         document.getElementById('floatRealData').classList.remove('hidden');
-                        // Precise dot on bar + update label
                         if (data.float != null) {
                             rangeLabel.textContent = `Float: ${data.float.toFixed(7)}`;
                             const dot = document.getElementById('floatDot');
                             dot.style.left = (data.float * 100).toFixed(3) + '%';
                             dot.classList.remove('hidden');
                         }
-                        // Doppler phase badge
                         if (data.phase) {
                             const phaseEl = document.getElementById('floatPhaseText');
                             phaseEl.textContent = data.phase;
                             const phaseColors = {
-                                'Ruby':        'text-red-400 border-red-500/40 bg-red-500/10',
-                                'Sapphire':    'text-blue-400 border-blue-500/40 bg-blue-500/10',
+                                'Ruby': 'text-red-400 border-red-500/40 bg-red-500/10',
+                                'Sapphire': 'text-blue-400 border-blue-500/40 bg-blue-500/10',
                                 'Black Pearl': 'text-purple-300 border-purple-500/40 bg-purple-500/10',
-                                'Emerald':     'text-emerald-400 border-emerald-500/40 bg-emerald-500/10',
+                                'Emerald': 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10',
                             };
                             const cls = phaseColors[data.phase] || 'text-cyan-400 border-cyan-500/40 bg-cyan-500/10';
                             phaseEl.className = 'inline-block px-4 py-1.5 rounded-full font-black text-sm border ' + cls;
                             document.getElementById('floatPhaseBadge').classList.remove('hidden');
                         }
-                        // Update CSFloat link to direct item inspect
                         document.getElementById('floatCSFloatBtn').href = 'https://csfloat.com/?inspectLink=' + encodeURIComponent(inspectLink);
                     })
                     .catch(() => {
                         document.getElementById('floatFetchLoading').classList.add('hidden');
                         document.getElementById('floatInfoNote').classList.remove('hidden');
                     });
+            } else {
+                document.getElementById('floatInspectActions').classList.add('hidden');
             }
 
             document.getElementById('floatModal').classList.remove('hidden');
         }
 
-        function closeFloat() {
-            document.getElementById('floatModal').classList.add('hidden');
+        function closeFloat() { document.getElementById('floatModal').classList.add('hidden'); }
+
+        function copyInspectLink() {
+            if (!currentInspectLink) return;
+            navigator.clipboard.writeText(currentInspectLink);
+            const btn = document.getElementById('copyInspectBtn');
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = 'Copy Inspect Link', 2000);
+        }
+
+        async function loadWearPrices() {
+            document.getElementById('wearCompareSection').classList.remove('hidden');
+            document.getElementById('wearCompareLoading').classList.remove('hidden');
+            document.getElementById('wearCompareTable').classList.add('hidden');
+            document.getElementById('wearCompareBtn').disabled = true;
+            document.getElementById('wearCompareBtn').textContent = 'Loading...';
+            try {
+                const res = await fetch('/api/wear-prices?mhn=' + encodeURIComponent(currentFloatMhn));
+                const data = await res.json();
+                if (data.error) {
+                    document.getElementById('wearCompareLoading').textContent = data.error;
+                    return;
+                }
+                const item = ITEMS.find(i => i.market_hash_name === currentFloatMhn);
+                const currentPrice = item ? item.price : 0;
+                const wearAbbrs = ['FN','MW','FT','WW','BS'];
+                const wearFull = ['Factory New','Minimal Wear','Field-Tested','Well-Worn','Battle-Scarred'];
+                const tbody = document.getElementById('wearCompareBody');
+                tbody.innerHTML = wearAbbrs.map((abbr, i) => {
+                    const price = data.prices[abbr];
+                    if (!price) return '';
+                    const isCurrent = wearFull[i] === currentFloatWear;
+                    const diff = currentPrice > 0 ? ((price - currentPrice) / currentPrice * 100).toFixed(1) : null;
+                    const diffHtml = diff != null
+                        ? `<span class="${parseFloat(diff) >= 0 ? 'text-emerald-400' : 'text-red-400'}">${parseFloat(diff) >= 0 ? '+' : ''}${diff}%</span>`
+                        : '—';
+                    return `<tr class="${isCurrent ? 'bg-white/5' : ''}">
+                        <td class="text-gray-300 ${isCurrent ? 'font-bold text-white' : ''}">${wearFull[i]}</td>
+                        <td class="text-right text-gray-200">$${price.toFixed(2)}</td>
+                        <td class="text-right">${isCurrent ? '<span class="text-gray-500">current</span>' : diffHtml}</td>
+                    </tr>`;
+                }).join('');
+                document.getElementById('wearCompareLoading').classList.add('hidden');
+                document.getElementById('wearCompareTable').classList.remove('hidden');
+            } catch(e) {
+                document.getElementById('wearCompareLoading').textContent = 'Failed to load prices.';
+            }
+            document.getElementById('wearCompareBtn').disabled = false;
+            document.getElementById('wearCompareBtn').textContent = 'Compare Wear Prices →';
         }
 
         // ── P&L / Buy Price ───────────────────────────────────────────────────
@@ -645,6 +1049,7 @@
 
         function updatePnLDisplay() {
             let totalPnl = 0, hasPnl = false;
+            // Grid
             document.querySelectorAll('.pnl-display').forEach(el => {
                 const mhn = el.dataset.mhn;
                 if (!(mhn in buyPrices)) return;
@@ -656,6 +1061,17 @@
                 const sign = pnl >= 0 ? '+' : '';
                 el.textContent = `${sign}$${pnl.toFixed(2)}`;
                 el.className = `pnl-display text-center text-xs font-semibold mt-1 ${pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`;
+            });
+            // List view
+            document.querySelectorAll('.list-pnl').forEach(el => {
+                const mhn = el.dataset.mhn;
+                if (!(mhn in buyPrices)) return;
+                const item = ITEMS.find(i => i.market_hash_name === mhn);
+                if (!item) return;
+                const pnl = (item.price - buyPrices[mhn]) * item.amount;
+                const sign = pnl >= 0 ? '+' : '';
+                el.textContent = `${sign}$${pnl.toFixed(2)}`;
+                el.className = `list-pnl text-xs font-semibold ${pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`;
             });
             if (hasPnl) {
                 document.getElementById('pnlTotal').classList.remove('hidden');
@@ -692,12 +1108,12 @@
 
         // ── CSV Export ────────────────────────────────────────────────────────
         function exportCSV() {
-            const rows = [['Skin', 'Wear', 'Qty', 'Current Price', 'Total Value', 'Buy Price', 'P&L']];
+            const rows = [['Skin', 'Wear', 'Type', 'Collection', 'Rarity', 'Qty', 'Current Price', 'Total Value', 'Buy Price', 'P&L']];
             ITEMS.forEach(item => {
                 const bp = buyPrices[item.market_hash_name];
                 const pl = bp != null ? ((item.price - bp) * item.amount).toFixed(2) : '';
-                const plFmt = pl !== '' ? (pl >= 0 ? `+$${pl}` : `-$${Math.abs(pl)}`) : '';
-                rows.push([item.name, item.wear || '', item.amount,
+                const plFmt = pl !== '' ? (parseFloat(pl) >= 0 ? `+$${pl}` : `-$${Math.abs(pl)}`) : '';
+                rows.push([item.name, item.wear || '', item.weapon_type || '', item.collection || '', item.rarity_name || '', item.amount,
                     `$${item.price.toFixed(2)}`, `$${item.total.toFixed(2)}`,
                     bp != null ? `$${bp.toFixed(2)}` : '', plFmt]);
             });
@@ -708,8 +1124,6 @@
             a.download = `cs2-inventory-${STEAM_ID}.csv`;
             a.click();
         }
-
-        loadBuyPrices();
 
         // ── Price Alert ───────────────────────────────────────────────────────
         let alertMhn = '', alertSkinName = '';
@@ -781,10 +1195,13 @@
             }
         }
 
-        // ── Inventory Filter ──────────────────────────────────────────────────
+        // ── Filters ───────────────────────────────────────────────────────────
         let activeWear = '';
+        let activeWeaponType = '';
         let activeFilterST = false;
+        let activeFilterSV = false;
         let activeFilterSpecial = false;
+        let activeFilterFav = false;
 
         function setWear(wear) {
             activeWear = wear;
@@ -793,45 +1210,76 @@
                 btn.className = 'filter-wear-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ' +
                     (on ? 'border-white/10 bg-white/5 text-gray-300' : 'border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400');
             });
-            filterCards();
+            applySortAndFilter();
+        }
+
+        function setWeaponType(type) {
+            activeWeaponType = type ? type.toLowerCase() : '';
+            document.querySelectorAll('.filter-wtype-btn').forEach(btn => {
+                const on = btn.dataset.wtype === activeWeaponType;
+                btn.className = 'filter-wtype-btn px-3 py-1 rounded-lg text-xs font-semibold transition-all border ' +
+                    (on ? 'border-purple-500/40 text-purple-400 bg-purple-500/5' : 'border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400');
+            });
+            applySortAndFilter();
         }
 
         function toggleFilter(type) {
-            if (type === 'st') {
-                activeFilterST = !activeFilterST;
-                const btn = document.getElementById('filterSTBtn');
-                btn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ' +
-                    (activeFilterST ? 'border-orange-500/40 text-orange-400 bg-orange-500/5' : 'border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400');
-            } else {
-                activeFilterSpecial = !activeFilterSpecial;
-                const btn = document.getElementById('filterSpecialBtn');
-                btn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ' +
-                    (activeFilterSpecial ? 'border-purple-500/40 text-purple-400 bg-purple-500/5' : 'border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400');
-            }
-            filterCards();
+            const map = {
+                st: { flag: 'activeFilterST', btn: 'filterSTBtn', cls: 'border-orange-500/40 text-orange-400 bg-orange-500/5' },
+                sv: { flag: 'activeFilterSV', btn: 'filterSVBtn', cls: 'border-yellow-500/40 text-yellow-400 bg-yellow-500/5' },
+                special: { flag: 'activeFilterSpecial', btn: 'filterSpecialBtn', cls: 'border-purple-500/40 text-purple-400 bg-purple-500/5' },
+                fav: { flag: 'activeFilterFav', btn: 'filterFavBtn', cls: 'border-yellow-500/40 text-yellow-300 bg-yellow-500/5' },
+            };
+            const m = map[type];
+            if (!m) return;
+            if (type === 'st') activeFilterST = !activeFilterST;
+            else if (type === 'sv') activeFilterSV = !activeFilterSV;
+            else if (type === 'special') activeFilterSpecial = !activeFilterSpecial;
+            else if (type === 'fav') activeFilterFav = !activeFilterFav;
+            const on = type === 'st' ? activeFilterST : type === 'sv' ? activeFilterSV : type === 'special' ? activeFilterSpecial : activeFilterFav;
+            const btn = document.getElementById(m.btn);
+            btn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ' +
+                (on ? m.cls : 'border-white/5 text-gray-600 hover:border-white/10 hover:text-gray-400');
+            applySortAndFilter();
         }
 
         function filterCards() {
             const search = (document.getElementById('filterSearch').value || '').toLowerCase();
-            const cards = document.querySelectorAll('.skin-card');
+            const cards = document.querySelectorAll('#skinGrid .skin-card');
             let visible = 0;
             cards.forEach(card => {
                 const name = (card.dataset.name || '').toLowerCase();
                 const wear = card.dataset.wear || '';
+                const wtype = card.dataset.weaponType || '';
                 const st = card.dataset.stattrak === 'true';
+                const sv = card.dataset.souvenir === 'true';
                 const special = card.dataset.special === 'true';
+                const mhn = card.dataset.mhn || '';
+                const fav = favorites.has(mhn);
                 const show = (!search || name.includes(search)) &&
                              (!activeWear || wear === activeWear) &&
+                             (!activeWeaponType || wtype === activeWeaponType) &&
                              (!activeFilterST || st) &&
-                             (!activeFilterSpecial || special);
+                             (!activeFilterSV || sv) &&
+                             (!activeFilterSpecial || special) &&
+                             (!activeFilterFav || fav);
                 card.style.display = show ? '' : 'none';
                 if (show) visible++;
             });
             const countEl = document.getElementById('filterCount');
             if (countEl) countEl.textContent = visible < cards.length ? `${visible} of ${cards.length} shown` : '';
+            // Also rebuild list if in list view
+            if (currentView === 'list') renderListView();
         }
 
         document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAlert(); closeShare(); closeWishlist(); closeBuyPrice(); closeFloat(); } });
+
+        // ── Init ──────────────────────────────────────────────────────────────
+        buildBreakdown();
+        buildWeaponTypeRow();
+        applyFavoritesOnLoad();
+        loadBuyPrices();
+        reorderGrid(); // apply default sort (value desc matches server sort, but keeps it dynamic)
     </script>
 </body>
 </html>

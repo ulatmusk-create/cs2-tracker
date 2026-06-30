@@ -331,12 +331,20 @@ def parse_items(steam_id, inv_data):
 
         rarity_color = '#b0c3d9'
         wear = ''
+        weapon_type = ''
+        rarity_name = ''
+        collection = ''
         for tag in desc.get('tags', []):
             cat = tag.get('category', '')
             if cat == 'Rarity':
                 rarity_color = f"#{tag.get('color', 'b0c3d9')}"
+                rarity_name = tag.get('localized_tag_name', '')
             elif cat == 'Exterior':
                 wear = tag.get('localized_tag_name', '')
+            elif cat == 'Type':
+                weapon_type = tag.get('localized_tag_name', '')
+            elif cat == 'ItemSet':
+                collection = tag.get('localized_tag_name', '')
 
         icon = ''
         if desc.get('icon_url'):
@@ -380,6 +388,9 @@ def parse_items(steam_id, inv_data):
                 'is_stattrak': is_stattrak,
                 'is_souvenir': is_souvenir,
                 'is_special': is_special,
+                'weapon_type': weapon_type,
+                'rarity_name': rarity_name,
+                'collection': collection,
             }
     return list(seen.values())
 
@@ -876,6 +887,42 @@ def get_float():
         return jsonify({'error': 'Request timed out — try again'}), 504
     except Exception as e:
         return jsonify({'error': 'Failed to fetch float data'}), 500
+
+
+# ── Wear Prices ───────────────────────────────────────────────────────────────
+
+WEAR_SUFFIXES = [
+    ('Factory New', 'FN'),
+    ('Minimal Wear', 'MW'),
+    ('Field-Tested', 'FT'),
+    ('Well-Worn', 'WW'),
+    ('Battle-Scarred', 'BS'),
+]
+WEAR_FULL = [w for w, _ in WEAR_SUFFIXES]
+
+def strip_wear(mhn):
+    for wear, _ in WEAR_SUFFIXES:
+        if mhn.endswith(f' ({wear})'):
+            return mhn[: -(len(wear) + 3)], wear
+    return mhn, None
+
+@app.route('/api/wear-prices')
+def wear_prices():
+    mhn = request.args.get('mhn', '').strip()
+    if not mhn:
+        return jsonify({'error': 'Missing mhn'}), 400
+    base, current_wear = strip_wear(mhn)
+    if not current_wear:
+        return jsonify({'error': 'No wear tier in name'}), 400
+    variants = {abbr: f"{base} ({wear})" for wear, abbr in WEAR_SUFFIXES}
+    prices = {}
+    with ThreadPoolExecutor(max_workers=5) as ex:
+        futures = {ex.submit(fetch_price, v): abbr for abbr, v in variants.items()}
+        for fut in as_completed(futures):
+            abbr = futures[fut]
+            _, price = fut.result()
+            prices[abbr] = price
+    return jsonify({'base_name': base, 'prices': prices})
 
 
 # ── Pricing & Stripe ──────────────────────────────────────────────────────────
