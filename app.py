@@ -220,36 +220,53 @@ def fetch_inventory(steam_id):
     all_descriptions = {}
     last_assetid = None
 
-    for _ in range(20):
-        params = {'l': 'english'}
+    consecutive_errors = 0
+    for _ in range(30):
+        params = {'l': 'english', 'count': 5000}
         if last_assetid:
             params['start_assetid'] = last_assetid
 
         try:
             r = requests.get(
                 f"https://steamcommunity.com/inventory/{steam_id}/730/2",
-                params=params, headers=HEADERS, timeout=15
+                params=params, headers=HEADERS, timeout=20
             )
         except Exception as e:
-            return None, f"Request failed: {e}"
+            # Only hard-fail on first request; mid-pagination errors might be transient
+            if not all_assets:
+                return None, f"Request failed: {e}"
+            break
 
         if r.status_code == 403:
             return None, "Inventory is private. Go to Steam → Edit Profile → Privacy Settings → set Inventory to Public."
         if r.status_code == 401:
             return None, "Inventory is private."
+        if r.status_code == 429:
+            time.sleep(3)
+            consecutive_errors += 1
+            if consecutive_errors >= 3:
+                break
+            continue
         if r.status_code != 200:
-            return None, f"Steam returned HTTP {r.status_code}. Try again in a moment."
+            if not all_assets:
+                return None, f"Steam returned HTTP {r.status_code}. Try again in a moment."
+            break
 
+        consecutive_errors = 0
         try:
             data = r.json()
         except Exception:
-            return None, "Steam returned an unreadable response. Try again."
+            if not all_assets:
+                return None, "Steam returned an unreadable response. Try again."
+            break
 
         if not data or not data.get('success'):
             err = data.get('Error', '') if data else ''
-            if 'private' in err.lower():
-                return None, "Inventory is private. Go to Steam → Edit Profile → Privacy Settings → set Inventory to Public."
-            return None, f"Steam could not load this inventory. ({err or 'unknown reason'})"
+            if not all_assets:
+                if 'private' in err.lower():
+                    return None, "Inventory is private. Go to Steam → Edit Profile → Privacy Settings → set Inventory to Public."
+                return None, f"Steam could not load this inventory. ({err or 'unknown reason'})"
+            break
 
         all_assets.extend(data.get('assets', []))
         for desc in data.get('descriptions', []):
@@ -259,7 +276,9 @@ def fetch_inventory(steam_id):
         if not data.get('more_items'):
             break
         last_assetid = data.get('last_assetid')
-        time.sleep(0.5)
+        if not last_assetid:
+            break
+        time.sleep(0.3)
 
     return {'success': 1, 'assets': all_assets, 'descriptions': list(all_descriptions.values())}, None
 
