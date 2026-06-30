@@ -9,6 +9,7 @@ import uuid
 import json
 import csv
 import io
+import threading
 import xml.etree.ElementTree as ET
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -25,6 +26,7 @@ app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))
 CACHE_TTL = 3600
 price_cache = {}
 float_cache = {}  # inspect_url -> float data (floats never change, safe to cache forever)
+jobs = {}  # job_id -> {status, progress, steam_id, items, total, history, error, ts}
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0'
@@ -527,44 +529,72 @@ def index():
     return render_template('index.html', user=user)
 
 
-def do_track(steam_id):
-    inv_data, err = fetch_inventory(steam_id)
-    if not inv_data:
-        return render_template('index.html', error=err, user=get_current_user())
+def _run_inventory_job(job_id, steam_id):
+    def progress(msg):
+        if job_id in jobs:
+            jobs[job_id]['progress'] = msg
 
-    items = parse_items(steam_id, inv_data)
-    if not items:
-        return render_template('index.html', user=get_current_user(),
-            error="No marketable CS2 items found. Your inventory may be empty or everything is untradable.")
+    try:
+        progress('Fetching inventory from Steam...')
+        inv_data, err = fetch_inventory(steam_id)
+        if not inv_data:
+            jobs[job_id].update({'status': 'error', 'error': err})
+            return
 
-    unique_names = list({item['market_hash_name'] for item in items})
-    prices = {}
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        futures = {executor.submit(fetch_price, name): name for name in unique_names}
-        for future in as_completed(futures):
-            name, price = future.result()
-            prices[name] = price
+        items = parse_items(steam_id, inv_data)
+        if not items:
+            jobs[job_id].update({'status': 'error',
+                'error': 'No marketable CS2 items found. Inventory may be empty or all items are untradable.'})
+            return
 
-    total = 0.0
-    for item in items:
-        p = prices.get(item['market_hash_name'], 0.0)
-        item['price'] = p
-        item['total'] = round(p * item['amount'], 2)
-        total += item['total']
+        progress(f'Pricing {len(items)} unique items...')
+        unique_names = list({item['market_hash_name'] for item in items})
+        prices = {}
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {executor.submit(fetch_price, name): name for name in unique_names}
+            for future in as_completed(futures):
+                name, price = future.result()
+                prices[name] = price
 
-    items.sort(key=lambda x: x['total'], reverse=True)
-    total = round(total, 2)
+        progress('Calculating values...')
+        total = 0.0
+        for item in items:
+            p = prices.get(item['market_hash_name'], 0.0)
+            item['price'] = p
+            item['total'] = round(p * item['amount'], 2)
+            total += item['total']
 
-    save_snapshot(steam_id, total, len(items))
+        items.sort(key=lambda x: x['total'], reverse=True)
+        total = round(total, 2)
 
-    with db() as cur:
-        cur.execute(f"SELECT total_value, recorded_at FROM snapshots WHERE steam_id={P} ORDER BY recorded_at ASC", (steam_id,))
-        history = [{'value': float(r['total_value']), 'date': r['recorded_at'][:10]} for r in cur.fetchall()]
+        save_snapshot(steam_id, total, len(items))
 
-    return render_template('dashboard.html',
-        items=items, total=total, steam_id=steam_id,
-        count=len(items), top_item=items[0] if items else None,
-        history=history, user=get_current_user())
+        with db() as cur:
+            cur.execute(f"SELECT total_value, recorded_at FROM snapshots WHERE steam_id={P} ORDER BY recorded_at ASC", (steam_id,))
+            history = [{'value': float(r['total_value']), 'date': r['recorded_at'][:10]} for r in cur.fetchall()]
+
+        jobs[job_id].update({
+            'status': 'done',
+            'items': items,
+            'total': total,
+            'history': history,
+            'count': len(items),
+        })
+    except Exception as e:
+        if job_id in jobs:
+            jobs[job_id].update({'status': 'error', 'error': str(e)})
+
+
+def _start_job(steam_id):
+    # Purge jobs older than 2 hours
+    now = time.time()
+    for jid in [k for k, v in list(jobs.items()) if now - v.get('ts', 0) > 7200]:
+        jobs.pop(jid, None)
+
+    job_id = str(uuid.uuid4())[:12]
+    jobs[job_id] = {'status': 'loading', 'steam_id': steam_id, 'progress': 'Starting...', 'ts': now}
+    threading.Thread(target=_run_inventory_job, args=(job_id, steam_id), daemon=True).start()
+    return render_template('loading.html', job_id=job_id, steam_id=steam_id, user=get_current_user())
 
 
 @app.route('/track', methods=['POST'])
@@ -573,7 +603,7 @@ def track():
     steam_id, err = extract_steam_id(profile)
     if not steam_id:
         return render_template('index.html', error=err, user=get_current_user())
-    return do_track(steam_id)
+    return _start_job(steam_id)
 
 
 @app.route('/me')
@@ -581,7 +611,31 @@ def me():
     user = get_current_user()
     if not user:
         return redirect('/')
-    return do_track(user['steam_id'])
+    return _start_job(user['steam_id'])
+
+
+@app.route('/api/job/<job_id>')
+def job_status(job_id):
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({'status': 'error', 'error': 'Session expired — please go back and try again.'}), 404
+    if job['status'] == 'loading':
+        return jsonify({'status': 'loading', 'progress': job.get('progress', 'Loading...')})
+    if job['status'] == 'error':
+        return jsonify({'status': 'error', 'error': job.get('error', 'An error occurred.')})
+    return jsonify({'status': 'done'})
+
+
+@app.route('/results/<job_id>')
+def results(job_id):
+    job = jobs.get(job_id)
+    if not job or job['status'] != 'done':
+        return redirect('/')
+    items = job['items']
+    return render_template('dashboard.html',
+        items=items, total=job['total'], steam_id=job['steam_id'],
+        count=job['count'], top_item=items[0] if items else None,
+        history=job['history'], user=get_current_user())
 
 
 # ── Steam OpenID login ────────────────────────────────────────────────────────

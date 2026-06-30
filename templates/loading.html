@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loading inventory…</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #080c18; }
+        @keyframes spin-ring {
+            to { transform: rotate(360deg); }
+        }
+        .ring {
+            width: 64px; height: 64px;
+            border: 3px solid rgba(249,115,22,0.15);
+            border-top-color: #f97316;
+            border-radius: 50%;
+            animation: spin-ring 0.9s linear infinite;
+        }
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { animation: fade-in 0.4s ease both; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center text-gray-200 px-6">
+
+    <div class="text-center max-w-sm w-full fade-in">
+
+        <a href="/" class="inline-flex items-center gap-1.5 mb-16">
+            <span class="text-orange-500 font-black text-xl">CS2</span>
+            <span class="text-white font-bold text-xl">Tracker</span>
+        </a>
+
+        <div class="flex justify-center mb-8">
+            <div class="ring"></div>
+        </div>
+
+        <h1 class="text-white font-bold text-xl mb-2">Loading inventory</h1>
+        <p id="progressMsg" class="text-gray-500 text-sm mb-1 transition-all duration-300">Starting…</p>
+        <p class="text-gray-700 text-xs font-mono mt-3" id="elapsed">0s</p>
+
+        <div id="errorBox" class="hidden mt-10 bg-red-500/10 border border-red-500/20 rounded-2xl p-5">
+            <p class="text-red-400 font-semibold mb-1">Couldn't load inventory</p>
+            <p id="errorMsg" class="text-red-400/70 text-sm mb-5 leading-relaxed"></p>
+            <a href="/" class="inline-block bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-sm font-semibold px-6 py-2.5 rounded-xl transition-colors">
+                Try Again
+            </a>
+        </div>
+
+    </div>
+
+    <script>
+        const JOB_ID = "{{ job_id }}";
+        const startTime = Date.now();
+        let ticker;
+
+        setInterval(() => {
+            document.getElementById('elapsed').textContent = Math.floor((Date.now() - startTime) / 1000) + 's';
+        }, 1000);
+
+        async function check() {
+            try {
+                const r = await fetch('/api/job/' + JOB_ID);
+                const d = await r.json();
+
+                if (d.status === 'loading') {
+                    document.getElementById('progressMsg').textContent = d.progress || 'Loading…';
+                } else if (d.status === 'done') {
+                    clearInterval(ticker);
+                    document.getElementById('progressMsg').textContent = 'Done — loading results…';
+                    window.location.href = '/results/' + JOB_ID;
+                } else {
+                    clearInterval(ticker);
+                    document.getElementById('progressMsg').textContent = 'Something went wrong.';
+                    document.getElementById('errorMsg').textContent = d.error || 'Unknown error.';
+                    document.getElementById('errorBox').classList.remove('hidden');
+                    document.querySelector('.ring').style.opacity = '0.2';
+                }
+            } catch (_) { /* keep ticking on transient network errors */ }
+        }
+
+        check();
+        ticker = setInterval(check, 10000);
+    </script>
+</body>
+</html>
