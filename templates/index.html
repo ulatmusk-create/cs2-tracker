@@ -91,15 +91,6 @@
                 </p>
             </form>
 
-            <div id="loading" class="hidden mt-8">
-                <div class="flex items-center justify-center gap-3 text-gray-400">
-                    <svg class="animate-spin h-5 w-5 text-orange-500 shrink-0" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                    </svg>
-                    <span class="text-sm">Fetching inventory &amp; market prices&hellip; (~15–30 seconds)</span>
-                </div>
-            </div>
         </div>
 
         <div class="max-w-5xl mx-auto px-6 pb-16">
@@ -127,9 +118,8 @@
         document.getElementById('trackForm').addEventListener('submit', function () {
             const btn = document.getElementById('submitBtn');
             btn.disabled = true;
-            btn.textContent = 'Loading...';
+            btn.textContent = 'Opening…';
             btn.style.opacity = '0.7';
-            document.getElementById('loading').classList.remove('hidden');
         });
     </script>
 </body>

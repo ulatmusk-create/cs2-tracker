@@ -567,11 +567,18 @@ def _run_inventory_job(job_id, steam_id):
         items.sort(key=lambda x: x['total'], reverse=True)
         total = round(total, 2)
 
-        save_snapshot(steam_id, total, len(items))
+        try:
+            save_snapshot(steam_id, total, len(items))
+        except Exception as e:
+            print(f'[job] save_snapshot non-fatal: {e}')
 
-        with db() as cur:
-            cur.execute(f"SELECT total_value, recorded_at FROM snapshots WHERE steam_id={P} ORDER BY recorded_at ASC", (steam_id,))
-            history = [{'value': float(r['total_value']), 'date': r['recorded_at'][:10]} for r in cur.fetchall()]
+        history = []
+        try:
+            with db() as cur:
+                cur.execute(f"SELECT total_value, recorded_at FROM snapshots WHERE steam_id={P} ORDER BY recorded_at ASC", (steam_id,))
+                history = [{'value': float(r['total_value']), 'date': r['recorded_at'][:10]} for r in cur.fetchall()]
+        except Exception as e:
+            print(f'[job] history fetch non-fatal: {e}')
 
         jobs[job_id].update({
             'status': 'done',
